@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AMPA · Región de Murcia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--tinta:#12323A;--mar:#0F5C6E;--limon:#F4C430;--fondo:#F3F7F6;--papel:#fff;--linea:#D5E1DF;--error:#B3261E;--suave:#5A7378;
+--t:'Bricolage Grotesque','Trebuchet MS',sans-serif;--c:'Nunito Sans','Segoe UI',sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fondo);color:var(--tinta);font:16px/1.55 var(--c)}
+h1,h2,h3{font-family:var(--t);margin:0;line-height:1.15}
+header{background:var(--mar);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid var(--limon)}
+header b{font-family:var(--t);font-size:1.15rem}
+main{max-width:860px;margin:0 auto;padding:24px 16px 60px}
+.card{background:var(--papel);border:1px solid var(--linea);border-radius:10px;padding:20px;margin-bottom:18px}
+label{display:block;font-weight:700;font-size:.9rem;margin:12px 0 4px}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--linea);border-radius:8px;font:inherit;background:#fff;color:inherit}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--limon);outline-offset:1px}
+button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;background:var(--mar);color:#fff}
+button.sec{background:transparent;color:var(--mar);border:1px solid var(--mar)}
+button.ghost{background:transparent;color:#fff;border:1px solid #ffffff88;padding:6px 12px}
+button.del{background:transparent;color:var(--error);padding:4px 8px}
+.msg{margin:12px 0 0;font-weight:600}.err{color:var(--error)}.ok{color:var(--mar)}
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tabs button{background:#fff;color:var(--tinta);border:1px solid var(--linea)}
+.tabs button.on{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.saludo{font-size:clamp(1.7rem,5vw,2.6rem);font-weight:800;margin:8px 0 6px}
+.chip{display:inline-block;background:#E4F0EE;color:var(--mar);border-radius:99px;padding:3px 12px;font-weight:700;font-size:.9rem;margin:0 6px 6px 0}
+.act{display:flex;gap:16px;padding:14px 0;border-top:1px solid var(--linea)}
+.act:first-child{border-top:0}
+.fecha{flex:0 0 58px;text-align:center;background:var(--limon);border-radius:8px;padding:6px 0;height:max-content}
+.fecha b{display:block;font:800 1.5rem/1 var(--t)}.fecha span{font-size:.8rem;font-weight:700}
+.act h3{font-size:1.1rem}.meta{color:var(--suave);font-size:.9rem}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--linea)}
+.code{font:700 1.05rem monospace;background:var(--fondo);padding:2px 8px;border-radius:6px;letter-spacing:.08em}
+.checks label{display:flex;gap:8px;align-items:center;font-weight:400;margin:4px 0}.checks input{width:auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.vacio{color:var(--suave)}
+a{color:var(--mar);font-weight:700}.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.btns button{padding:6px 12px}
+</style>
+</head>
+<body>
+<header><b>AMPA · Región de Murcia</b><span id="top"></span></header>
+<main id="app"></main>
+
+<script>
+// ===== CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (Project Settings > API) =====
+const SB_URL = 'https://xdehajjztfjmfdboaklu.supabase.co';
+const SB_KEY = 'sb_publishable_B9qLzLRVqeNufzUFVTjlCA_Ur7gY0_y';
+// ==========================================================================
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const saludo = () => { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches'; };
+const msg = (el, t, ok) => { el.className = 'msg ' + (ok ? 'ok' : 'err'); el.textContent = t; };
+const salir = async () => { await sb.auth.signOut(); };
+const topBar = () => { $('#top').innerHTML = '<button class="ghost" onclick="salir()">Salir</button>'; };
+let adminTab = 'familias';
+
+/* ---------- Acceso ---------- */
+function vistaAcceso(modo = 'entrar') {
+  $('#top').innerHTML = '';
+  app.innerHTML = `
+  <div class="card" style="max-width:440px;margin:30px auto">
+    <h2>${modo === 'entrar' ? 'Entra en tu AMPA' : 'Crea tu cuenta con tu código'}</h2>
+    <div class="tabs" style="margin-top:14px">
+      <button class="${modo === 'entrar' ? 'on' : ''}" onclick="vistaAcceso('entrar')">Ya tengo cuenta</button>
+      <button class="${modo === 'alta' ? 'on' : ''}" onclick="vistaAcceso('alta')">Tengo un código</button>
+    </div>
+    <form id="f">
+      ${modo === 'alta' ? '<label>Código que te dio el AMPA</label><input id="cod" required autocomplete="off" style="text-transform:uppercase">' : ''}
+      <label>Correo electrónico</label><input id="em" type="email" required autocomplete="email">
+      <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
+      <p><button>${modo === 'alta' ? 'Crear cuenta' : 'Entrar'}</button></p>
+      <p id="m" class="msg"></p>
+    </form>
+  </div>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
+    if (modo === 'entrar') {
+      const { error } = await sb.auth.signInWithPassword({ email: em, password: pw });
+      if (error) msg(m, 'Correo o contraseña incorrectos.');
+      return;
+    }
+    const code = $('#cod').value.trim().toUpperCase();
+    const { data: valido } = await sb.rpc('check_invitation', { p_code: code });
+    if (!valido) return msg(m, 'Ese código no es válido o ya se ha usado.');
+    const { data, error } = await sb.auth.signUp({ email: em, password: pw });
+    if (error) return msg(m, 'No se pudo crear la cuenta: ' + error.message);
+    localStorage.setItem('ampa_code', code);
+    if (!data.session) msg(m, 'Revisa tu correo para confirmar la cuenta y después entra con tus datos.', true);
+  };
+}
+
+/* ---------- Enrutado ---------- */
+async function ruta(session) {
+  if (!session) return vistaAcceso();
+  topBar();
+  let { data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (!perfil) {
+    const code = localStorage.getItem('ampa_code');
+    if (code) {
+      const { error } = await sb.rpc('claim_invitation', { p_code: code });
+      localStorage.removeItem('ampa_code');
+      if (!error) ({ data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle());
+    }
+  }
+  if (!perfil) return vistaSinCodigo();
+  perfil.role === 'admin' ? vistaAdmin(perfil) : vistaFamilia(perfil);
+}
+
+function vistaSinCodigo() {
+  app.innerHTML = `<div class="card" style="max-width:440px;margin:30px auto"><h2>Introduce tu código</h2>
+  <p>Tu cuenta aún no está vinculada a ninguna clase. Escribe el código que te dio el AMPA.</p>
+  <form id="f"><input id="cod" required style="text-transform:uppercase"><p><button>Vincular</button></p><p id="m" class="msg"></p></form></div>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    const { error } = await sb.rpc('claim_invitation', { p_code: $('#cod').value });
+    if (error) return msg($('#m'), 'Código no válido o ya usado.');
+    const { data } = await sb.auth.getSession(); ruta(data.session);
+  };
+}
+
+/* ---------- Landing familias ---------- */
+async function vistaFamilia(p) {
+  const [{ data: clases }, { data: acts }, { data: hijos }, { data: insc }, { data: files }] = await Promise.all([
+    sb.from('classes').select('*').order('name'),
+    sb.from('activities').select('*').order('starts_at'),
+    sb.from('children').select('*').order('name'),
+    sb.from('enrollments').select('activity_id,child_id'),
+    sb.from('activity_files').select('*')
+  ]);
+  const cl = Object.fromEntries((clases || []).map(c => [c.id, c]));
+  const ins = new Set((insc || []).map(i => i.activity_id + '|' + i.child_id));
+  const ahora = Date.now();
+  const prox = (acts || []).filter(a => new Date(a.starts_at) >= ahora);
+  const pas = (acts || []).filter(a => new Date(a.starts_at) < ahora).reverse();
+  const fila = (a, abierta) => {
+    const d = new Date(a.starts_at), hs = (hijos || []).filter(h => h.class_id === a.class_id);
+    const fs = (files || []).filter(f => f.activity_id === a.id);
+    return `<div class="act">
+    <div class="fecha"><b>${d.getDate()}</b><span>${d.toLocaleString('es-ES', { month: 'short' })}</span></div>
+    <div><h3>${esc(a.title)}</h3>
+    <div class="meta">${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}${a.place ? ' · ' + esc(a.place) : ''} · ${esc(cl[a.class_id]?.name)}</div>
+    ${a.description ? `<p style="margin:6px 0 0">${esc(a.description)}</p>` : ''}
+    ${fs.length ? `<div class="meta" style="margin-top:6px">Adjuntos: ${fs.map(f => `<a href="#" onclick="abrir('${esc(f.path)}');return false">${esc(f.name)}</a>`).join(' · ')}</div>` : ''}
+    ${abierta ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
+      return `<button class="${on ? '' : 'sec'}" onclick="inscribir('${a.id}','${h.id}',${on})">${on ? 'Inscrito/a: ' + esc(h.name) + ' (quitar)' : 'Inscribir a ' + esc(h.name)}</button>`; }).join('') ||
+      '<span class="meta">Añade a tus hijos/as más abajo para inscribirlos.</span>'}</div>` : ''}
+    </div></div>`; };
+  app.innerHTML = `
+    <h1 class="saludo">${saludo()}, ${esc(p.full_name)}</h1>
+    <div>${(clases || []).map(c => `<span class="chip">${esc(c.name)} · curso ${esc(c.course)}</span>`).join('')}</div>
+    <div class="card" style="margin-top:18px"><h2 style="margin-bottom:6px">Próximas actividades</h2>
+      ${prox.length ? prox.map(a => fila(a, true)).join('') : '<p class="vacio">Todavía no hay actividades programadas para tu clase.</p>'}</div>
+    <div class="card"><h2>Mis hijos/as</h2>
+      ${(hijos || []).map(h => `<div class="row"><span><b>${esc(h.name)}</b> · ${esc(cl[h.class_id]?.name)}</span>
+        <button class="del" onclick="borrar('children','id','${h.id}')">Quitar</button></div>`).join('') || '<p class="vacio">Aún no has añadido a ningún hijo/a.</p>'}
+      <form id="fHijo"><div class="grid"><div><label>Nombre</label><input id="hn" required></div>
+      <div><label>Clase</label><select id="hc">${(clases || []).map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div></div>
+      <p><button>Añadir hijo/a</button></p><p id="m" class="msg"></p></form></div>
+    ${pas.length ? `<div class="card"><h2 style="margin-bottom:6px">Actividades pasadas</h2>${pas.map(a => fila(a, false)).join('')}</div>` : ''}`;
+  $('#fHijo').onsubmit = async e => { e.preventDefault();
+    const { error } = await sb.from('children').insert({ parent_id: p.id, name: $('#hn').value.trim(), class_id: $('#hc').value });
+    error ? msg($('#m'), 'Error: ' + error.message) : ruta2(); };
+}
+
+/* ---------- Landing administración ---------- */
+async function vistaAdmin(p) {
+  const [{ data: clases }, { data: invs }, { data: acts }, { data: insc }, { data: files }] = await Promise.all([
+    sb.from('classes').select('*').order('course', { ascending: false }).order('name'),
+    sb.from('invitations').select('*').order('created_at', { ascending: false }),
+    sb.from('activities').select('*').order('starts_at', { ascending: false }),
+    sb.from('enrollments').select('activity_id, children(name)'),
+    sb.from('activity_files').select('*')
+  ]);
+  const cl = Object.fromEntries((clases || []).map(c => [c.id, c]));
+  const nom = c => c ? `${esc(c.name)} (${esc(c.course)})` : '—';
+  const detalle = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
+    return `<div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
+    <div class="meta">${fs.map(f => `<a href="#" onclick="abrir('${esc(f.path)}');return false">${esc(f.name)}</a>`).join(' · ') || 'Sin adjuntos'} · <input type="file" multiple onchange="subirA('${a.id}',this.files)" style="width:auto;padding:2px"></div>`; };
+  const opts = (clases || []).map(c => `<option value="${c.id}">${nom(c)}</option>`).join('');
+  const tabs = ['familias', 'actividades', 'clases'];
+  let cuerpo = '';
+  if (adminTab === 'familias') cuerpo = `
+    <div class="card"><h2>Añadir familia</h2>
+      <form id="fFam"><label>Nombre del padre/madre</label><input id="fn" required>
+      <label>Clase(s) de sus hijos/as</label>
+      <div class="checks">${(clases || []).map(c => `<label><input type="checkbox" value="${c.id}">${nom(c)}</label>`).join('') || '<p class="vacio">Crea primero una clase en la pestaña Clases.</p>'}</div>
+      <p><button>Generar código</button></p><p id="m" class="msg"></p></form></div>
+    <div class="card"><h2>Familias y códigos</h2>
+      ${(invs || []).map(i => `<div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${i.class_ids.map(id => nom(cl[id])).join(', ')}</div></div>
+      <div>${i.used_by ? '<span class="chip">Registrado</span>' : `<span class="code">${esc(i.code)}</span> <button class="del" onclick="borrar('invitations','code','${esc(i.code)}')">Borrar</button>`}</div></div>`).join('') || '<p class="vacio">Aún no hay familias.</p>'}</div>`;
+  if (adminTab === 'actividades') cuerpo = `
+    <div class="card"><h2>Nueva actividad</h2>
+      <form id="fAct"><div class="grid"><div><label>Clase</label><select id="ac" required>${opts}</select></div>
+      <div><label>Fecha y hora</label><input id="af" type="datetime-local" required></div>
+      <div><label>Título</label><input id="at" required></div><div><label>Lugar</label><input id="al"></div></div>
+      <label>Descripción</label><textarea id="ad" rows="3"></textarea>
+      <label>Adjuntos (PDF, imágenes)</label><input id="aa" type="file" multiple accept=".pdf,image/*">
+      <label class="checks" style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="an" type="checkbox" style="width:auto"> Avisar por correo a las familias de la clase</label>
+      <p><button>Publicar actividad</button></p><p id="m" class="msg"></p></form></div>
+    <div class="card"><h2>Actividades</h2>
+      ${(acts || []).map(a => `<div class="row"><div><b>${esc(a.title)}</b><div class="meta">${new Date(a.starts_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${nom(cl[a.class_id])}</div>${detalle(a)}</div>
+      <div class="btns"><button class="sec" onclick="avisar('${a.id}')">Avisar por correo</button><button class="del" onclick="borrar('activities','id','${a.id}')">Borrar</button></div></div>`).join('') || '<p class="vacio">Aún no hay actividades.</p>'}</div>`;
+  if (adminTab === 'clases') cuerpo = `
+    <div class="card"><h2>Nueva clase</h2>
+      <form id="fCl"><div class="grid"><div><label>Nombre</label><input id="cn" placeholder="3º A Primaria" required></div>
+      <div><label>Curso</label><input id="cc" placeholder="2026-2027" required></div></div>
+      <p><button>Crear clase</button></p><p id="m" class="msg"></p></form></div>
+    <div class="card"><h2>Clases</h2>${(clases || []).map(c => `<div class="row"><b>${nom(c)}</b>
+      <button class="del" onclick="borrar('classes','id','${c.id}')">Borrar</button></div>`).join('') || '<p class="vacio">Aún no hay clases.</p>'}</div>`;
+  app.innerHTML = `<h1 class="saludo">${saludo()}, ${esc(p.full_name)}</h1><p class="meta" style="margin:0 0 18px">Panel de administración</p>
+    <div class="tabs">${tabs.map(t => `<button class="${t === adminTab ? 'on' : ''}" onclick="adminTab='${t}';ruta2()">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>${cuerpo}`;
+
+  const f = (id, fn) => { const el = $(id); if (el) el.onsubmit = async e => { e.preventDefault(); const { error } = await fn(); error ? msg($('#m'), 'Error: ' + error.message) : ruta2(); }; };
+  f('#fFam', () => {
+    const ids = [...document.querySelectorAll('.checks input:checked')].map(x => x.value);
+    if (!ids.length) return { error: { message: 'Elige al menos una clase.' } };
+    const a = new Uint8Array(8); crypto.getRandomValues(a);
+    const code = [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
+    return sb.from('invitations').insert({ code, full_name: $('#fn').value.trim(), class_ids: ids });
+  });
+  f('#fAct', async () => {
+    const { data, error } = await sb.from('activities').insert({ class_id: $('#ac').value, title: $('#at').value.trim(), place: $('#al').value.trim() || null,
+      description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() }).select('id').single();
+    if (error) return { error };
+    const r = await subir(data.id, $('#aa').files); if (r.error) return r;
+    if ($('#an').checked) { const { error: e2 } = await sb.functions.invoke('notify-activity', { body: { activity_id: data.id } });
+      if (e2) return { error: { message: 'La actividad se creó, pero no se pudo enviar el correo.' } }; }
+    return {};
+  });
+  f('#fCl', () => sb.from('classes').insert({ name: $('#cn').value.trim(), course: $('#cc').value.trim() }));
+}
+async function ruta2() { const { data } = await sb.auth.getSession(); ruta(data.session); }
+async function borrar(tabla, col, val) {
+  if (!confirm('¿Seguro que quieres borrarlo?')) return;
+  const { error } = await sb.from(tabla).delete().eq(col, val);
+  error ? alert('No se pudo borrar: ' + error.message) : ruta2();
+}
+
+async function abrir(path) {
+  const { data, error } = await sb.storage.from('adjuntos').createSignedUrl(path, 300);
+  error ? alert('No se pudo abrir el archivo.') : window.open(data.signedUrl, '_blank');
+}
+async function inscribir(a, c, on) {
+  const q = on ? sb.from('enrollments').delete().eq('activity_id', a).eq('child_id', c) : sb.from('enrollments').insert({ activity_id: a, child_id: c });
+  const { error } = await q; error ? alert('No se pudo guardar: ' + error.message) : ruta2();
+}
+async function subir(actId, files) {
+  for (const f of files) {
+    const path = actId + '/' + Date.now() + '-' + f.name.replace(/[^A-Za-z0-9._-]/g, '_');
+    let { error } = await sb.storage.from('adjuntos').upload(path, f); if (error) return { error };
+    ({ error } = await sb.from('activity_files').insert({ activity_id: actId, name: f.name, path })); if (error) return { error };
+  }
+  return {};
+}
+async function subirA(id, files) { const r = await subir(id, files); r.error ? alert('No se pudo subir: ' + r.error.message) : ruta2(); }
+async function avisar(id) {
+  if (!confirm('¿Enviar un correo a las familias de esta clase?')) return;
+  const { data, error } = await sb.functions.invoke('notify-activity', { body: { activity_id: id } });
+  alert(error ? 'No se pudo enviar el correo.' : 'Correo enviado a ' + data.sent + ' familia(s).');
+}
+
+sb.auth.onAuthStateChange((ev, s) => { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT' || ev === 'INITIAL_SESSION') setTimeout(() => ruta(s), 0); });
+</script>
+</body>
+</html>
