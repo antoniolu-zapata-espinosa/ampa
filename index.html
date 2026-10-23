@@ -126,8 +126,8 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 <div id="app"></div><div id="sheet" onclick="if(event.target===this)cerrar()"></div>
 <script>
 // ===== CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (Project Settings > API) =====
-const SB_URL = 'https://xdehajjztfjmfdboaklu.supabase.co';
-const SB_KEY = 'sb_publishable_B9qLzLRVqeNufzUFVTjlCA_Ur7gY0_y';
+const SB_URL = 'https://TU-PROYECTO.supabase.co';
+const SB_KEY = 'TU_CLAVE_ANON_PUBLICA';
 // ==========================================================================
 const sb = supabase.createClient(SB_URL, SB_KEY);
 const $ = s => document.querySelector(s), app = $('#app');
@@ -153,7 +153,7 @@ const IC = {
 const ic = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const hola = n => { const h = new Date().getHours(); return `<div class="sol">${ic(h < 6 || h >= 21 ? 'moon' : 'sun', 26)}</div><div class="hi">${saludo()},<br>${esc(n)}</div>`; };
-let tab = null, D = {}, recovery = /type=recovery/.test(location.hash), registrando = false, rutaBusy = false, rutaPend = null;
+let tab = null, D = {}, recovery = /type=recovery/.test(location.hash), registrando = false, rutaBusy = false, rutaPend = null, claimErr = '';
 
 /* ---------- Estructura de la app ---------- */
 function shell(role, hero, body, tabs, fab, keep) {
@@ -191,7 +191,9 @@ function vistaAcceso(modo = 'entrar') {
     registrando = true;
     const { data, error } = await sb.auth.signUp({ email: em, password: pw });
     if (error) { registrando = false; return msg(m, 'No se pudo crear la cuenta: ' + error.message); }
-    if (data.session) { await sb.rpc('claim_invitation', { p_code: code }); registrando = false; return ruta2(); }
+    if (data.session) { const { error: e2 } = await sb.rpc('claim_invitation', { p_code: code }); registrando = false;
+      if (e2) { localStorage.setItem('ampa_code', code); return msg(m, 'Tu cuenta se creó, pero no se pudo vincular el código: ' + e2.message); }
+      return ruta2(); }
     registrando = false; localStorage.setItem('ampa_code', code);
     if (!data.session) msg(m, 'Revisa tu correo para confirmar la cuenta y después entra.', true);
   };
@@ -209,7 +211,7 @@ async function rutaInterna(session) {
   if (ep) return vistaError(ep.message);
   if (!perfil) {
     const code = localStorage.getItem('ampa_code');
-    if (code) { const { error } = await sb.rpc('claim_invitation', { p_code: code }); localStorage.removeItem('ampa_code');
+    if (code) { const { error } = await sb.rpc('claim_invitation', { p_code: code }); localStorage.removeItem('ampa_code'); claimErr = error ? error.message : '';
       ({ data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle()); }
   }
   if (!perfil) return vistaSinCodigo(session.user.email);
@@ -223,7 +225,8 @@ function vistaError(m) {
   <div class="authcard"><button class="btn" onclick="ruta2()">Reintentar</button>
   <button class="btn" style="background:var(--fondo);color:var(--tinta);box-shadow:none" onclick="salir()">Salir</button></div>`;
 }
-function vistaSinCodigo(email) {
+function vistaSinCodigo(email) { vistaSinCodigo0(email); if (claimErr) msg($('#m'), 'No se pudo vincular tu código: ' + claimErr); }
+function vistaSinCodigo0(email) {
   app.className = 'auth'; document.body.className = '';
   app.innerHTML = `<div class="splash"><div class="logo">${ic('book', 36)}</div><h1>Casi listo</h1><p>Has entrado como <b>${esc(email)}</b>. Escribe el código que te dio el AMPA para vincular tu cuenta.</p></div>
   <div class="authcard"><form id="f"><label>Código del AMPA</label><input id="cod" required autocapitalize="characters" style="text-transform:uppercase">
@@ -234,7 +237,7 @@ function vistaSinCodigo(email) {
     if (!error) return ruta2();
     const { data: { session } } = await sb.auth.getSession();
     const { data: pf } = await sb.from('profiles').select('id').eq('id', session.user.id).maybeSingle();
-    pf ? ruta2() : msg($('#m'), 'Código no válido o ya usado.'); };
+    pf ? ruta2() : msg($('#m'), 'No se pudo vincular: ' + error.message); };
 }
 
 /* ---------- Agenda (calendario) ---------- */
