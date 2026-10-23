@@ -352,6 +352,7 @@ async function vistaAdmin(p) {
 }
 const filaNuevo = () => `<div class="hrow"><input placeholder="Nombre del alumno/a"><select>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div>`;
 function addFam() {
+  function addFam() {
   const libres = D.kids.filter(h => !h.parent_id && !h.invitation_code);
   sheet('Añadir familia', `<form><label>Nombre del padre/madre</label><input id="fn" required>
   ${libres.length ? `<label>Alumnos ya creados, sin familia</label>${libres.map(h => `<label class="ck"><input type="checkbox" value="${h.id}">${esc(h.name)} · ${esc(D.clases.find(c => c.id === h.class_id)?.name || '')}</label>`).join('')}` : ''}
@@ -359,14 +360,40 @@ function addFam() {
   <button type="button" class="pill" style="margin-top:10px" onclick="$('#hs').insertAdjacentHTML('beforeend',filaNuevo())">${ic('plus', 15)}Alumno nuevo</button>` : ''}
   <p class="meta">Puedes crear la familia sin alumnos y asignarlos después desde la pestaña Alumnos.</p>
   <button class="btn">Generar código</button><p id="m" class="msg"></p></form>`);
+  
   form(async () => {
+    const nombrePadre = $('#fn').value.trim();
+    if (!nombrePadre) return { error: { message: "El nombre del padre/madre es obligatorio." } };
+
+    // Validar filas de alumnos nuevos antes de enviar nada
+    const filasNuevas = [...document.querySelectorAll('#hs .hrow')];
+    const nuevos = [];
+    for (const r of filasNuevas) {
+      const inputName = r.querySelector('input').value.trim();
+      const classId = r.querySelector('select').value;
+      if (inputName) {
+        nuevos.push({ name: inputName, class_id: classId });
+      }
+    }
+
     const a = new Uint8Array(8); crypto.getRandomValues(a);
     const code = [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
-    const { error } = await sb.from('invitations').insert({ code, full_name: $('#fn').value.trim() }); if (error) return { error };
+    
+    const { error } = await sb.from('invitations').insert({ code, full_name: nombrePadre }); 
+    if (error) return { error };
+
     const ids = [...document.querySelectorAll('#sheet input[type=checkbox]:checked')].map(x => x.value);
-    if (ids.length) { const { error: e2 } = await sb.from('children').update({ invitation_code: code }).in('id', ids); if (e2) return { error: e2 }; }
-    const nuevos = [...document.querySelectorAll('#hs .hrow')].map(r => ({ name: r.querySelector('input').value.trim(), class_id: r.querySelector('select').value, invitation_code: code })).filter(h => h.name);
-    if (nuevos.length) { const { error: e3 } = await sb.from('children').insert(nuevos); if (e3) return { error: e3 }; }
+    if (ids.length) { 
+      const { error: e2 } = await sb.from('children').update({ invitation_code: code }).in('id', ids); 
+      if (e2) return { error: e2 }; 
+    }
+
+    if (nuevos.length) { 
+      const payloadNuevos = nuevos.map(h => ({ ...h, invitation_code: code }));
+      const { error: e3 } = await sb.from('children').insert(payloadNuevos); 
+      if (e3) return { error: e3 }; 
+    }
+    
     return {};
   });
 }
