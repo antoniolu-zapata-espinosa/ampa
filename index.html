@@ -126,11 +126,11 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 <div id="app"></div><div id="sheet" onclick="if(event.target===this)cerrar()"></div>
 <script>
 // ===== CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (Project Settings > API) =====
-const SB_URL = 'https://xdehajjztfjmfdboaklu.supabase.co';
-const SB_KEY = 'sb_publishable_B9qLzLRVqeNufzUFVTjlCA_Ur7gY0_y';
+const SB_URL = 'https://TU-PROYECTO.supabase.co';
+const SB_KEY = 'TU_CLAVE_ANON_PUBLICA';
 // ==========================================================================
 const sb = supabase.createClient(SB_URL, SB_KEY);
-const $= s => document.querySelector(s), app =$('#app');
+const $ = s => document.querySelector(s), app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const saludo = () => { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches'; };
 const msg = (el, t, ok) => { el.className = 'msg ' + (ok ? 'ok' : 'err'); el.textContent = t; };
@@ -285,7 +285,7 @@ async function vistaFamilia(p) {
     ${ab ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
       return `<button class="pill ${on ? 'on' : ''}" onclick="inscribir('${a.id}','${h.id}',${on})">${on ? '✓ ' + esc(h.name) : 'Inscribir a ' + esc(h.name)}</button>`; }).join('') || '<span class="meta">Tus hijos/as aparecerán aquí cuando el AMPA los asigne a una clase.</span>'}</div>` : ''}
     </div></div>`; };
-  const hero = `${hola(p.full_name)}<div>${(clases || []).map(c => `<span class="chip">${esc(c.name)} ·${esc(c.course)}</span>`).join('')}</div>`;
+  const hero = `${hola(p.full_name)}<div>${(clases || []).map(c => `<span class="chip">${esc(c.name)} · ${esc(c.course)}</span>`).join('')}</div>`;
   D.pintar = keep => {
     const body = tab === 'inicio'
       ? (prox.map((a, i) => card(a, true, i ? '' : 'next')).join('') || '<div class="card vacio">Todavía no hay actividades programadas para tu clase.</div>') + (pas.length ? `<div class="sec">Ya pasaron</div>${pas.slice(0, 10).map(a => card(a, false, 'old')).join('')}` : '')
@@ -311,4 +311,213 @@ async function vistaAdmin(p) {
     sb.from('activities').select('*').order('starts_at'), sb.from('enrollments').select('activity_id, children(name)'), sb.from('activity_files').select('*'),
     sb.from('profiles').select('*').order('role').order('full_name'), sb.from('children').select('*').eq('active', true).order('name')]);
   D = { me: p.id, clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [] };
-  const cl = Object.fromEntries(D.clases.map(c =>
+  const cl = Object.fromEntries(D.clases.map(c => [c.id, c])), nom = c => c ? `${esc(c.name)} (${esc(c.course)})` : '—';
+  const opts = sel => D.clases.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${nom(c)}</option>`).join('');
+  const del = (t, c, v) => `<button class="pill dan" aria-label="Borrar" onclick="borrar('${t}','${c}','${v}')">${ic('trash', 16)}</button>`;
+  const filaK = h => `<div class="row" style="margin-top:8px"><span>${esc(h.name)}</span><span class="row" style="gap:6px"><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select>
+    <button class="pill dan" aria-label="Quitar" onclick="borrar('children','id','${h.id}')">${ic('trash', 15)}</button></span></div>`;
+  const fam = i => { const reg = !!i.used_by, hs = D.kids.filter(h => reg ? h.parent_id === i.used_by : h.invitation_code === i.code), leg = reg ? [] : (i.hijos || []);
+    return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${reg ? 'Registrado' : 'Pendiente de registro'}</div></div>
+    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${reg ? 'p' : 'c'}','${reg ? i.used_by : esc(i.code)}')">${ic('plus', 15)}Alumno</button>${reg ? '' : del('invitations', 'code', esc(i.code))}</span></div>
+    <div>${hs.map(filaK).join('')}${leg.map(h => `<span class="chip2">${esc(h.name)} · ${nom(cl[h.class_id])}</span>`).join('')}${hs.length || leg.length ? '' : '<span class="meta">Sin alumnos asignados todavía</span>'}</div>
+    ${reg ? '' : `<div class="btns"><span class="code" onclick="navigator.clipboard?.writeText('${esc(i.code)}');this.textContent='Copiado'">${esc(i.code)}</span>
+    <a class="pill" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Hola ' + i.full_name + ', tu código para la app del AMPA es ' + i.code)}">Enviar por WhatsApp</a></div>`}</div>`; };
+  const alu = h => `<div class="card"><div class="row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div>
+    <div><b>${esc(h.name)}</b><div class="meta">${h.parent_id || h.invitation_code ? 'Con familia' : '<span style="color:var(--error)">Sin familia todavía</span>'}</div></div></div>${del('children', 'id', h.id)}</div>
+    <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
+    <div><label>Familia</label><select class="mini" onchange="asignarAlumno('${h.id}',this.value)">${famOpts(h)}</select></div></div></div>`;
+  const actAdmin = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
+    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${nom(cl[a.class_id])}</div>
+    <div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
+    <div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}
+    <label class="pill" style="margin:0">${ic('plus', 15)}Adjuntar<input type="file" multiple hidden onchange="subirA('${a.id}',this.files)"></label>
+    <button class="pill" onclick="avisar('${a.id}')">${ic('bell', 15)}Avisar</button>${del('activities', 'id', a.id)}</div></div></div>`; };
+  D.pintar = keep => {
+    let body = '';
+    if (tab === 'familias') body = D.invs.map(fam).join('') || '<div class="card vacio">Pulsa + para añadir una familia. También puedes crear antes a los alumnos en la pestaña Alumnos.</div>';
+    if (tab === 'alumnos') body = `<div class="card"><select onchange="AL.c=this.value;D.pintar(true)"><option value="">Todas las clases</option>${opts(AL.c)}</select></div>`
+      + (D.kids.filter(h => !AL.c || h.class_id === AL.c).map(alu).join('') || '<div class="card vacio">Pulsa + para añadir alumnos. No hace falta que su familia exista todavía.</div>');
+    if (tab === 'actividades') body = agenda(acts || [], actAdmin, 'No hay actividades este día. Pulsa + para crear una.');
+    if (tab === 'clases') body = `<div class="card next"><b>Nuevo curso</b><p class="meta" style="margin:4px 0 0">Pasa a todos los alumnos a su siguiente clase de una sola vez.</p>
+      <div class="btns"><button class="pill" onclick="nuevoCurso()">Preparar el cambio de curso</button></div></div>`
+      + (D.clases.map(c => `<div class="card row"><div><b>${esc(c.name)}</b><div class="meta">Curso ${esc(c.course)} · ${D.kids.filter(h => h.class_id === c.id).length} alumnos</div></div>${del('classes', 'id', c.id)}</div>`).join('') || '<div class="card vacio">Pulsa + para crear la primera clase.</div>');
+    if (tab === 'equipo') body = D.perfs.map((x, i) => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(x.full_name[0]?.toUpperCase())}</div>
+      <div><b>${esc(x.full_name)}</b><div class="meta">${esc(x.email || 'sin correo guardado')}</div></div></div>
+      <div class="btns" style="margin:0;justify-content:flex-end"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button>${x.id === D.me ? '' : `<button class="pill dan" aria-label="Eliminar usuario" onclick="borrarUsuario(${i})">${ic('trash', 15)}</button>`}</div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>';
+    const hero = `${hola(p.full_name)}<div class="stats"><div><b>${D.invs.length}</b>familias</div><div><b>${D.kids.length}</b>alumnos</div><div><b>${(acts || []).length}</b>actividades</div></div>`;
+    shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'cal', l: 'Agenda' }, { id: 'clases', i: 'book', l: 'Clases' }, { id: 'equipo', i: 'shield', l: 'Equipo' }],
+      { familias: 'addFam', alumnos: 'addAlumno', actividades: 'addAct', clases: 'addClase', equipo: 'addAdmin' }[tab], keep);
+  };
+  D.pintar();
+}
+const filaNuevo = () => `<div class="hrow"><input placeholder="Nombre del alumno/a"><select>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div>`;
+function addFam() {
+  const libres = D.kids.filter(h => !h.parent_id && !h.invitation_code);
+  sheet('Añadir familia', `<form><label>Nombre del padre/madre</label><input id="fn" required>
+  ${libres.length ? `<label>Alumnos ya creados, sin familia</label>${libres.map(h => `<label class="ck"><input type="checkbox" value="${h.id}">${esc(h.name)} · ${esc(D.clases.find(c => c.id === h.class_id)?.name || '')}</label>`).join('')}` : ''}
+  ${D.clases.length ? `<label>Alumnos nuevos (opcional)</label><div id="hs"></div>
+  <button type="button" class="pill" style="margin-top:10px" onclick="$('#hs').insertAdjacentHTML('beforeend',filaNuevo())">${ic('plus', 15)}Alumno nuevo</button>` : ''}
+  <p class="meta">Puedes crear la familia sin alumnos y asignarlos después desde la pestaña Alumnos.</p>
+  <button class="btn">Generar código</button><p id="m" class="msg"></p></form>`);
+  form(async () => {
+    const a = new Uint8Array(8); crypto.getRandomValues(a);
+    const code = [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
+    const { error } = await sb.from('invitations').insert({ code, full_name: $('#fn').value.trim() }); if (error) return { error };
+    const ids = [...document.querySelectorAll('#sheet input[type=checkbox]:checked')].map(x => x.value);
+    if (ids.length) { const { error: e2 } = await sb.from('children').update({ invitation_code: code }).in('id', ids); if (e2) return { error: e2 }; }
+    const nuevos = [...document.querySelectorAll('#hs .hrow')].map(r => ({ name: r.querySelector('input').value.trim(), class_id: r.querySelector('select').value, invitation_code: code })).filter(h => h.name);
+    if (nuevos.length) { const { error: e3 } = await sb.from('children').insert(nuevos); if (e3) return { error: e3 }; }
+    return {};
+  });
+}
+function addAlumno() {
+  if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
+  sheet('Añadir alumnos', `<form><label>Clase</label><select id="ac2">${D.clases.map(c => `<option value="${c.id}" ${c.id === AL.c ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  <label>Nombre(s): uno por línea</label><textarea id="an2" rows="5" required placeholder="Lucía Pérez&#10;Mario Ruiz"></textarea>
+  <label>Familia (opcional, se puede asignar después)</label><select id="af2">${famOpts({})}</select>
+  <button class="btn">Guardar alumnos</button><p id="m" class="msg"></p></form>`);
+  form(() => { const nombres = $('#an2').value.split('\n').map(x => x.trim()).filter(Boolean);
+    if (!nombres.length) return { error: { message: 'Escribe al menos un nombre.' } };
+    const f = $('#af2').value, extra = f.startsWith('p:') ? { parent_id: f.slice(2) } : f.startsWith('c:') ? { invitation_code: f.slice(2) } : {};
+    return sb.from('children').insert(nombres.map(name => ({ name, class_id: $('#ac2').value, ...extra }))); });
+}
+function addHijoAdmin(kind, ref) {
+  if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
+  sheet('Añadir alumno a la familia', `<form><label>Nombre</label><input id="hn" required><label>Clase</label><select id="hc">${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  <button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.from('children').insert({ name: $('#hn').value.trim(), class_id: $('#hc').value, ...(kind === 'p' ? { parent_id: ref } : { invitation_code: ref }) }));
+}
+async function asignarAlumno(id, v) {
+  const cambio = v.startsWith('p:') ? { parent_id: v.slice(2), invitation_code: null } : v.startsWith('c:') ? { parent_id: null, invitation_code: v.slice(2) } : { parent_id: null, invitation_code: null };
+  const { error } = await sb.from('children').update(cambio).eq('id', id); error ? alert('No se pudo asignar: ' + error.message) : ruta2();
+}
+async function moverHijo(id, cid) { const { error } = await sb.from('children').update({ class_id: cid }).eq('id', id); error ? alert('No se pudo cambiar: ' + error.message) : ruta2(); }
+function addClase() {
+  sheet('Nueva clase', `<form><label>Nombre</label><input id="cn" placeholder="3º A Primaria" required><label>Curso</label><input id="cc" placeholder="2026-2027" required>
+  <button class="btn">Crear clase</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.from('classes').insert({ name: $('#cn').value.trim(), course: $('#cc').value.trim() }));
+}
+function nuevoCurso() {
+  const cnt = c => D.kids.filter(h => h.class_id === c.id).length;
+  const guess = c => { const t = c.name.replace(/\d+/, n => +n + 1), f = D.clases.find(x => x.name === t); return f ? f.id : ''; };
+  sheet('Cambio de curso', `<form><p class="meta">Elige a qué clase pasa cada una. Se mueve a todos los alumnos de golpe. «Termina el colegio» da de baja a esos alumnos: dejan de verse en la app de las familias.</p>
+  ${D.clases.map(c => `<label>${esc(c.name)} · ${cnt(c)} alumnos</label><select data-from="${c.id}"><option value="">Se queda en esta clase</option>${D.clases.filter(x => x.id !== c.id).map(x => `<option value="${x.id}" ${x.id === guess(c) ? 'selected' : ''}>Pasa a ${esc(x.name)}</option>`).join('')}<option value="FIN">Termina el colegio</option></select>`).join('')}
+  <label>Nuevo curso escolar (opcional, actualiza el curso de todas las clases)</label><input id="nc" placeholder="2027-2028">
+  <button class="btn">Aplicar el cambio</button><p id="m" class="msg"></p></form>`);
+  form(async () => {
+    const mapa = [...document.querySelectorAll('#sheet select[data-from]')].filter(s => s.value).map(s => ({ from: s.dataset.from, to: s.value === 'FIN' ? null : s.value, fin: s.value === 'FIN' }));
+    if (!mapa.length) return { error: { message: 'No hay ningún cambio que aplicar.' } };
+    if (!confirm('Esto cambia de clase a los alumnos. ¿Continuar?')) return { error: { message: 'Cancelado.' } };
+    const { data, error } = await sb.rpc('avanzar_curso', { p_map: mapa }); if (error) return { error };
+    const nc = $('#nc').value.trim(); if (nc) await sb.from('classes').update({ course: nc }).not('id', 'is', null);
+    alert('Hecho: ' + data.movidos + ' alumnos cambiados de clase y ' + data.baja + ' dados de baja.'); return {};
+  });
+}
+function addAct() {
+  sheet('Nueva actividad', `<form><label>Clase</label><select id="ac" required>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  <label>Título</label><input id="at" required><label>Fecha y hora</label><input id="af" type="datetime-local" value="${AG.sel ? AG.sel + 'T16:00' : ''}" required><label>Lugar</label><input id="al">
+  <label>Descripción</label><textarea id="ad" rows="3"></textarea><label>Adjuntos (PDF, imágenes)</label><input id="aa" type="file" multiple accept=".pdf,image/*">
+  <label class="ck"><input id="an" type="checkbox">Avisar por correo a las familias de la clase</label>
+  <button class="btn">Publicar</button><p id="m" class="msg"></p></form>`);
+  form(async () => {
+    const { data, error } = await sb.from('activities').insert({ class_id: $('#ac').value, title: $('#at').value.trim(), place: $('#al').value.trim() || null,
+      description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() }).select('id').single();
+    if (error) return { error };
+    const r = await subir(data.id, $('#aa').files); if (r.error) return r;
+    if ($('#an').checked) { const { error: e2 } = await sb.functions.invoke('notify-activity', { body: { activity_id: data.id } });
+      if (e2) return { error: { message: 'Se creó, pero no se pudo enviar el correo.' } }; }
+    return {};
+  });
+}
+async function borrarUsuario(i) {
+  const x = D.perfs[i];
+  if (!confirm('¿Eliminar la cuenta de ' + x.full_name + (x.email ? ' (' + x.email + ')' : '') + '? Podrá volver a registrarse con su código y sus alumnos se mantienen.')) return;
+  const { error } = await sb.rpc('borrar_usuario', { p_id: x.id });
+  error ? alert(error.message) : ruta2();
+}
+function addAdmin() {
+  sheet('Nuevo administrador', `<form><p class="meta">La persona debe estar ya registrada en la app.</p><label>Correo</label><input id="ae" type="email" required>
+  <button class="btn">Dar permisos</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.rpc('set_admin', { p_email: $('#ae').value.trim(), p_admin: true }));
+}
+async function setAdmin(i, on) {
+  const email = D.perfs[i]?.email;
+  if (!email || !confirm((on ? 'Dar' : 'Quitar') + ' permisos de administrador a ' + email + '?')) return;
+  const { error } = await sb.rpc('set_admin', { p_email: email, p_admin: on });
+  error ? alert(error.message) : ruta2();
+}
+
+/* ---------- Contraseñas ---------- */
+function cambiarClave() {
+  sheet('Cambiar contraseña', `<form><label>Nueva contraseña</label><input id="np" type="password" minlength="6" required autocomplete="new-password">
+  <button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.auth.updateUser({ password: $('#np').value }));
+}
+async function recuperar() {
+  const em = prompt('Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva:');
+  if (!em) return;
+  const { error } = await sb.auth.resetPasswordForEmail(em.trim(), { redirectTo: location.origin + location.pathname });
+  alert(error ? 'No se pudo enviar el correo.' : 'Si el correo existe, te hemos enviado un enlace.');
+}
+function vistaNuevaClave() {
+  app.className = 'auth'; document.body.className = '';
+  app.innerHTML = `<div class="splash"><div class="logo">${ic('key', 36)}</div><h1>Nueva contraseña</h1><p>Elige una contraseña nueva para tu cuenta.</p></div>
+  <div class="authcard"><form id="f"><label>Nueva contraseña</label><input id="np" type="password" minlength="6" required autocomplete="new-password">
+  <button class="btn">Guardar y entrar</button><p id="m" class="msg"></p></form></div>`;
+  $('#f').onsubmit = async e => { e.preventDefault(); const { error } = await sb.auth.updateUser({ password: $('#np').value });
+    if (error) return msg($('#m'), 'No se pudo cambiar: ' + error.message);
+    recovery = false; history.replaceState(null, '', location.pathname); ruta2(); };
+}
+function claveUsuario(i) {
+  const x = D.perfs[i];
+  sheet('Contraseña de ' + esc(x.full_name), `<form><p class="meta">Las contraseñas no se pueden leer: se guardan cifradas. Aquí puedes fijar una nueva o enviar un enlace por correo.</p>
+  <label>Nueva contraseña temporal (mín. 8)</label><input id="np" type="text" minlength="8" required autocomplete="off">
+  <button class="btn">Establecer contraseña</button><p id="m" class="msg"></p></form>
+  <button class="btn" style="background:var(--fondo);color:var(--tinta);box-shadow:none" onclick="enlaceClave(${i})">Enviar enlace por correo</button>`);
+  form(async () => { const { data, error } = await sb.functions.invoke('admin-password', { body: { user_id: x.id, password: $('#np').value } });
+    return { error: error || (data?.error ? { message: data.error } : null) }; });
+}
+async function enlaceClave(i) {
+  const em = D.perfs[i].email;
+  const { error } = await sb.auth.resetPasswordForEmail(em, { redirectTo: location.origin + location.pathname });
+  alert(error ? 'No se pudo enviar el correo.' : 'Enlace enviado a ' + em); cerrar();
+}
+
+/* ---------- Acciones ---------- */
+async function borrar(tabla, col, val) {
+  if (!confirm('¿Seguro que quieres borrarlo?')) return;
+  const { error } = await sb.from(tabla).delete().eq(col, val); error ? alert('No se pudo borrar: ' + error.message) : ruta2();
+}
+async function abrir(path) {
+  const { data, error } = await sb.storage.from('adjuntos').createSignedUrl(path, 300);
+  error ? alert('No se pudo abrir el archivo.') : window.open(data.signedUrl, '_blank');
+}
+async function inscribir(a, c, on) {
+  const q = on ? sb.from('enrollments').delete().eq('activity_id', a).eq('child_id', c) : sb.from('enrollments').insert({ activity_id: a, child_id: c });
+  const { error } = await q; error ? alert('No se pudo guardar: ' + error.message) : ruta2();
+}
+async function subir(actId, files) {
+  for (const f of files) {
+    const path = actId + '/' + Date.now() + '-' + f.name.replace(/[^A-Za-z0-9._-]/g, '_');
+    let { error } = await sb.storage.from('adjuntos').upload(path, f); if (error) return { error };
+    ({ error } = await sb.from('activity_files').insert({ activity_id: actId, name: f.name, path })); if (error) return { error };
+  }
+  return {};
+}
+async function subirA(id, files) { const r = await subir(id, files); r.error ? alert('No se pudo subir: ' + r.error.message) : ruta2(); }
+async function avisar(id) {
+  if (!confirm('¿Enviar un correo a las familias de esta clase?')) return;
+  const { data, error } = await sb.functions.invoke('notify-activity', { body: { activity_id: id } });
+  alert(error ? 'No se pudo enviar el correo.' : 'Correo enviado a ' + data.sent + ' familia(s).');
+}
+
+sb.auth.onAuthStateChange((ev, s) => {
+  if (registrando) return;
+  if (ev === 'PASSWORD_RECOVERY') recovery = true;
+  if (recovery && s) return void setTimeout(vistaNuevaClave, 0);
+  if (['SIGNED_IN', 'SIGNED_OUT', 'INITIAL_SESSION'].includes(ev)) setTimeout(() => ruta(s), 0);
+});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
