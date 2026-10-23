@@ -119,14 +119,15 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 .mini{width:auto;padding:6px 8px;border-radius:10px;font-size:.8rem;max-width:150px}
 .chip2{display:inline-block;background:#E3F3F1;color:var(--mar);border-radius:99px;padding:3px 12px;font-weight:700;font-size:.85rem;margin:8px 6px 0 0}
 .hrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid2 .mini{width:100%;max-width:none}.grid2 label{margin-top:8px}
 </style>
 </head>
 <body>
 <div id="app"></div><div id="sheet" onclick="if(event.target===this)cerrar()"></div>
 <script>
 // ===== CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (Project Settings > API) =====
-const SB_URL = 'https://xdehajjztfjmfdboaklu.supabase.co';
-const SB_KEY = 'sb_publishable_B9qLzLRVqeNufzUFVTjlCA_Ur7gY0_y';
+const SB_URL = 'https://TU-PROYECTO.supabase.co';
+const SB_KEY = 'TU_CLAVE_ANON_PUBLICA';
 // ==========================================================================
 const sb = supabase.createClient(SB_URL, SB_KEY);
 const $ = s => document.querySelector(s), app = $('#app');
@@ -283,24 +284,34 @@ async function vistaFamilia(p) {
 }
 
 /* ---------- App de administración ---------- */
+const AL = { c: '' };
+function famOpts(h) {
+  return '<option value="">Sin familia</option>' + (D.invs || []).map(i => { const v = i.used_by ? 'p:' + i.used_by : 'c:' + i.code;
+    const on = i.used_by ? h.parent_id === i.used_by : h.invitation_code === i.code;
+    return `<option value="${v}" ${on ? 'selected' : ''}>${esc(i.full_name)}${i.used_by ? '' : ' (pendiente)'}</option>`; }).join('');
+}
 async function vistaAdmin(p) {
-  if (!['familias', 'actividades', 'clases', 'equipo'].includes(tab)) tab = 'familias';
+  if (!['familias', 'alumnos', 'actividades', 'clases', 'equipo'].includes(tab)) tab = 'familias';
   const [{ data: clases }, { data: invs }, { data: acts }, { data: insc }, { data: files }, { data: perfs }, { data: kids }] = await Promise.all([
     sb.from('classes').select('*').order('name'), sb.from('invitations').select('*').order('created_at', { ascending: false }),
     sb.from('activities').select('*').order('starts_at'), sb.from('enrollments').select('activity_id, children(name)'), sb.from('activity_files').select('*'),
     sb.from('profiles').select('*').order('role').order('full_name'), sb.from('children').select('*').eq('active', true).order('name')]);
-  D = { clases: clases || [], perfs: perfs || [], kids: kids || [] };
+  D = { clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [] };
   const cl = Object.fromEntries(D.clases.map(c => [c.id, c])), nom = c => c ? `${esc(c.name)} (${esc(c.course)})` : '—';
   const opts = sel => D.clases.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${nom(c)}</option>`).join('');
   const del = (t, c, v) => `<button class="pill dan" aria-label="Borrar" onclick="borrar('${t}','${c}','${v}')">${ic('trash', 16)}</button>`;
-  const fam = i => { const reg = !!i.used_by, hs = reg ? D.kids.filter(h => h.parent_id === i.used_by) : (i.hijos || []);
+  const filaK = h => `<div class="row" style="margin-top:8px"><span>${esc(h.name)}</span><span class="row" style="gap:6px"><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select>
+    <button class="pill dan" aria-label="Quitar" onclick="borrar('children','id','${h.id}')">${ic('trash', 15)}</button></span></div>`;
+  const fam = i => { const reg = !!i.used_by, hs = D.kids.filter(h => reg ? h.parent_id === i.used_by : h.invitation_code === i.code), leg = reg ? [] : (i.hijos || []);
     return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${reg ? 'Registrado' : 'Pendiente de registro'}</div></div>
-    ${reg ? `<button class="pill" onclick="addHijoAdmin('${i.used_by}')">${ic('plus', 15)}Hijo/a</button>` : del('invitations', 'code', esc(i.code))}</div>
-    <div>${hs.map(h => reg
-      ? `<div class="row" style="margin-top:8px"><span>${esc(h.name)}</span><span class="row" style="gap:6px"><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select><button class="pill dan" aria-label="Quitar" onclick="borrar('children','id','${h.id}')">${ic('trash', 15)}</button></span></div>`
-      : `<span class="chip2">${esc(h.name)} · ${nom(cl[h.class_id])}</span>`).join('') || '<span class="meta">Sin hijos/as</span>'}</div>
+    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${reg ? 'p' : 'c'}','${reg ? i.used_by : esc(i.code)}')">${ic('plus', 15)}Alumno</button>${reg ? '' : del('invitations', 'code', esc(i.code))}</span></div>
+    <div>${hs.map(filaK).join('')}${leg.map(h => `<span class="chip2">${esc(h.name)} · ${nom(cl[h.class_id])}</span>`).join('')}${hs.length || leg.length ? '' : '<span class="meta">Sin alumnos asignados todavía</span>'}</div>
     ${reg ? '' : `<div class="btns"><span class="code" onclick="navigator.clipboard?.writeText('${esc(i.code)}');this.textContent='Copiado'">${esc(i.code)}</span>
     <a class="pill" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Hola ' + i.full_name + ', tu código para la app del AMPA es ' + i.code)}">Enviar por WhatsApp</a></div>`}</div>`; };
+  const alu = h => `<div class="card"><div class="row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div>
+    <div><b>${esc(h.name)}</b><div class="meta">${h.parent_id || h.invitation_code ? 'Con familia' : '<span style="color:var(--error)">Sin familia todavía</span>'}</div></div></div>${del('children', 'id', h.id)}</div>
+    <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
+    <div><label>Familia</label><select class="mini" onchange="asignarAlumno('${h.id}',this.value)">${famOpts(h)}</select></div></div></div>`;
   const actAdmin = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
     return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${nom(cl[a.class_id])}</div>
     <div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
@@ -309,7 +320,9 @@ async function vistaAdmin(p) {
     <button class="pill" onclick="avisar('${a.id}')">${ic('bell', 15)}Avisar</button>${del('activities', 'id', a.id)}</div></div></div>`; };
   D.pintar = keep => {
     let body = '';
-    if (tab === 'familias') body = (invs || []).map(fam).join('') || '<div class="card vacio">Pulsa + para añadir la primera familia.</div>';
+    if (tab === 'familias') body = D.invs.map(fam).join('') || '<div class="card vacio">Pulsa + para añadir una familia. También puedes crear antes a los alumnos en la pestaña Alumnos.</div>';
+    if (tab === 'alumnos') body = `<div class="card"><select onchange="AL.c=this.value;D.pintar(true)"><option value="">Todas las clases</option>${opts(AL.c)}</select></div>`
+      + (D.kids.filter(h => !AL.c || h.class_id === AL.c).map(alu).join('') || '<div class="card vacio">Pulsa + para añadir alumnos. No hace falta que su familia exista todavía.</div>');
     if (tab === 'actividades') body = agenda(acts || [], actAdmin, 'No hay actividades este día. Pulsa + para crear una.');
     if (tab === 'clases') body = `<div class="card next"><b>Nuevo curso</b><p class="meta" style="margin:4px 0 0">Pasa a todos los alumnos a su siguiente clase de una sola vez.</p>
       <div class="btns"><button class="pill" onclick="nuevoCurso()">Preparar el cambio de curso</button></div></div>`
@@ -317,28 +330,52 @@ async function vistaAdmin(p) {
     if (tab === 'equipo') body = D.perfs.map((x, i) => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(x.full_name[0]?.toUpperCase())}</div>
       <div><b>${esc(x.full_name)}</b><div class="meta">${esc(x.email || 'sin correo guardado')}</div></div></div>
       <div class="btns" style="margin:0;flex-wrap:nowrap"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button></div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>';
-    const hero = `${hola(p.full_name)}<div class="stats"><div><b>${(invs || []).length}</b>familias</div><div><b>${(acts || []).length}</b>actividades</div><div><b>${D.kids.length}</b>alumnos</div></div>`;
-    shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'actividades', i: 'cal', l: 'Agenda' }, { id: 'clases', i: 'book', l: 'Clases' }, { id: 'equipo', i: 'shield', l: 'Equipo' }],
-      { familias: 'addFam', actividades: 'addAct', clases: 'addClase', equipo: 'addAdmin' }[tab], keep);
+    const hero = `${hola(p.full_name)}<div class="stats"><div><b>${D.invs.length}</b>familias</div><div><b>${D.kids.length}</b>alumnos</div><div><b>${(acts || []).length}</b>actividades</div></div>`;
+    shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'cal', l: 'Agenda' }, { id: 'clases', i: 'book', l: 'Clases' }, { id: 'equipo', i: 'shield', l: 'Equipo' }],
+      { familias: 'addFam', alumnos: 'addAlumno', actividades: 'addAct', clases: 'addClase', equipo: 'addAdmin' }[tab], keep);
   };
   D.pintar();
 }
-const filaHijo = () => `<div class="hrow"><input placeholder="Nombre del hijo/a" required><select>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div>`;
+const filaNuevo = () => `<div class="hrow"><input placeholder="Nombre del alumno/a"><select>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div>`;
 function addFam() {
-  if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
-  sheet('Añadir familia', `<form><label>Nombre del padre/madre</label><input id="fn" required><label>Hijos/as y su clase</label><div id="hs">${filaHijo()}</div>
-  <button type="button" class="pill" style="margin-top:10px" onclick="$('#hs').insertAdjacentHTML('beforeend',filaHijo())">${ic('plus', 15)}Otro hijo/a</button>
+  const libres = D.kids.filter(h => !h.parent_id && !h.invitation_code);
+  sheet('Añadir familia', `<form><label>Nombre del padre/madre</label><input id="fn" required>
+  ${libres.length ? `<label>Alumnos ya creados, sin familia</label>${libres.map(h => `<label class="ck"><input type="checkbox" value="${h.id}">${esc(h.name)} · ${esc(D.clases.find(c => c.id === h.class_id)?.name || '')}</label>`).join('')}` : ''}
+  ${D.clases.length ? `<label>Alumnos nuevos (opcional)</label><div id="hs"></div>
+  <button type="button" class="pill" style="margin-top:10px" onclick="$('#hs').insertAdjacentHTML('beforeend',filaNuevo())">${ic('plus', 15)}Alumno nuevo</button>` : ''}
+  <p class="meta">Puedes crear la familia sin alumnos y asignarlos después desde la pestaña Alumnos.</p>
   <button class="btn">Generar código</button><p id="m" class="msg"></p></form>`);
-  form(() => { const hijos = [...document.querySelectorAll('#hs .hrow')].map(r => ({ name: r.querySelector('input').value.trim(), class_id: r.querySelector('select').value })).filter(h => h.name);
-    if (!hijos.length) return { error: { message: 'Añade al menos un hijo/a.' } };
+  form(async () => {
     const a = new Uint8Array(8); crypto.getRandomValues(a);
     const code = [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
-    return sb.from('invitations').insert({ code, full_name: $('#fn').value.trim(), hijos }); });
+    const { error } = await sb.from('invitations').insert({ code, full_name: $('#fn').value.trim() }); if (error) return { error };
+    const ids = [...document.querySelectorAll('#sheet input[type=checkbox]:checked')].map(x => x.value);
+    if (ids.length) { const { error: e2 } = await sb.from('children').update({ invitation_code: code }).in('id', ids); if (e2) return { error: e2 }; }
+    const nuevos = [...document.querySelectorAll('#hs .hrow')].map(r => ({ name: r.querySelector('input').value.trim(), class_id: r.querySelector('select').value, invitation_code: code })).filter(h => h.name);
+    if (nuevos.length) { const { error: e3 } = await sb.from('children').insert(nuevos); if (e3) return { error: e3 }; }
+    return {};
+  });
 }
-function addHijoAdmin(pid) {
-  sheet('Añadir hijo/a', `<form><label>Nombre</label><input id="hn" required><label>Clase</label><select id="hc">${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+function addAlumno() {
+  if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
+  sheet('Añadir alumnos', `<form><label>Clase</label><select id="ac2">${D.clases.map(c => `<option value="${c.id}" ${c.id === AL.c ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  <label>Nombre(s): uno por línea</label><textarea id="an2" rows="5" required placeholder="Lucía Pérez&#10;Mario Ruiz"></textarea>
+  <label>Familia (opcional, se puede asignar después)</label><select id="af2">${famOpts({})}</select>
+  <button class="btn">Guardar alumnos</button><p id="m" class="msg"></p></form>`);
+  form(() => { const nombres = $('#an2').value.split('\n').map(x => x.trim()).filter(Boolean);
+    if (!nombres.length) return { error: { message: 'Escribe al menos un nombre.' } };
+    const f = $('#af2').value, extra = f.startsWith('p:') ? { parent_id: f.slice(2) } : f.startsWith('c:') ? { invitation_code: f.slice(2) } : {};
+    return sb.from('children').insert(nombres.map(name => ({ name, class_id: $('#ac2').value, ...extra }))); });
+}
+function addHijoAdmin(kind, ref) {
+  if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
+  sheet('Añadir alumno a la familia', `<form><label>Nombre</label><input id="hn" required><label>Clase</label><select id="hc">${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
   <button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
-  form(() => sb.from('children').insert({ parent_id: pid, name: $('#hn').value.trim(), class_id: $('#hc').value }));
+  form(() => sb.from('children').insert({ name: $('#hn').value.trim(), class_id: $('#hc').value, ...(kind === 'p' ? { parent_id: ref } : { invitation_code: ref }) }));
+}
+async function asignarAlumno(id, v) {
+  const cambio = v.startsWith('p:') ? { parent_id: v.slice(2), invitation_code: null } : v.startsWith('c:') ? { parent_id: null, invitation_code: v.slice(2) } : { parent_id: null, invitation_code: null };
+  const { error } = await sb.from('children').update(cambio).eq('id', id); error ? alert('No se pudo asignar: ' + error.message) : ruta2();
 }
 async function moverHijo(id, cid) { const { error } = await sb.from('children').update({ class_id: cid }).eq('id', id); error ? alert('No se pudo cambiar: ' + error.message) : ruta2(); }
 function addClase() {
