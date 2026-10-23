@@ -126,8 +126,8 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 <div id="app"></div><div id="sheet" onclick="if(event.target===this)cerrar()"></div>
 <script>
 // ===== CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (Project Settings > API) =====
-const SB_URL = 'https://xdehajjztfjmfdboaklu.supabase.co';
-const SB_KEY = 'sb_publishable_B9qLzLRVqeNufzUFVTjlCA_Ur7gY0_y';
+const SB_URL = 'https://TU-PROYECTO.supabase.co';
+const SB_KEY = 'TU_CLAVE_ANON_PUBLICA';
 // ==========================================================================
 const sb = supabase.createClient(SB_URL, SB_KEY);
 const $ = s => document.querySelector(s), app = $('#app');
@@ -153,7 +153,7 @@ const IC = {
 const ic = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const hola = n => { const h = new Date().getHours(); return `<div class="sol">${ic(h < 6 || h >= 21 ? 'moon' : 'sun', 26)}</div><div class="hi">${saludo()},<br>${esc(n)}</div>`; };
-let tab = null, D = {}, recovery = /type=recovery/.test(location.hash);
+let tab = null, D = {}, recovery = /type=recovery/.test(location.hash), registrando = false, rutaBusy = false, rutaPend = null;
 
 /* ---------- Estructura de la app ---------- */
 function shell(role, hero, body, tabs, fab, keep) {
@@ -188,21 +188,29 @@ function vistaAcceso(modo = 'entrar') {
     const code = $('#cod').value.trim().toUpperCase();
     const { data: valido } = await sb.rpc('check_invitation', { p_code: code });
     if (!valido) return msg(m, 'Ese código no es válido o ya se ha usado.');
+    registrando = true;
     const { data, error } = await sb.auth.signUp({ email: em, password: pw });
-    if (error) return msg(m, 'No se pudo crear la cuenta: ' + error.message);
-    localStorage.setItem('ampa_code', code);
+    if (error) { registrando = false; return msg(m, 'No se pudo crear la cuenta: ' + error.message); }
+    if (data.session) { await sb.rpc('claim_invitation', { p_code: code }); registrando = false; return ruta2(); }
+    registrando = false; localStorage.setItem('ampa_code', code);
     if (!data.session) msg(m, 'Revisa tu correo para confirmar la cuenta y después entra.', true);
   };
 }
 
 async function ruta(session) {
+  if (rutaBusy) { rutaPend = { s: session }; return; }
+  rutaBusy = true;
+  try { await rutaInterna(session); } finally { rutaBusy = false; }
+  if (rutaPend) { const n = rutaPend.s; rutaPend = null; ruta(n); }
+}
+async function rutaInterna(session) {
   if (!session) return vistaAcceso();
   let { data: perfil, error: ep } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
   if (ep) return vistaError(ep.message);
   if (!perfil) {
     const code = localStorage.getItem('ampa_code');
     if (code) { const { error } = await sb.rpc('claim_invitation', { p_code: code }); localStorage.removeItem('ampa_code');
-      if (!error) ({ data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle()); }
+      ({ data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle()); }
   }
   if (!perfil) return vistaSinCodigo(session.user.email);
   perfil.role === 'admin' ? vistaAdmin(perfil) : vistaFamilia(perfil);
@@ -223,7 +231,10 @@ function vistaSinCodigo(email) {
   <p class="meta" style="margin:14px 0 0">¿Eres administrador del AMPA? Entonces tu cuenta aún no tiene el perfil de administrador en la base de datos.</p></div>`;
   $('#f').onsubmit = async e => { e.preventDefault();
     const { error } = await sb.rpc('claim_invitation', { p_code: $('#cod').value });
-    error ? msg($('#m'), 'Código no válido o ya usado.') : ruta2(); };
+    if (!error) return ruta2();
+    const { data: { session } } = await sb.auth.getSession();
+    const { data: pf } = await sb.from('profiles').select('id').eq('id', session.user.id).maybeSingle();
+    pf ? ruta2() : msg($('#m'), 'Código no válido o ya usado.'); };
 }
 
 /* ---------- Agenda (calendario) ---------- */
@@ -296,7 +307,7 @@ async function vistaAdmin(p) {
     sb.from('classes').select('*').order('name'), sb.from('invitations').select('*').order('created_at', { ascending: false }),
     sb.from('activities').select('*').order('starts_at'), sb.from('enrollments').select('activity_id, children(name)'), sb.from('activity_files').select('*'),
     sb.from('profiles').select('*').order('role').order('full_name'), sb.from('children').select('*').eq('active', true).order('name')]);
-  D = { clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [] };
+  D = { me: p.id, clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [] };
   const cl = Object.fromEntries(D.clases.map(c => [c.id, c])), nom = c => c ? `${esc(c.name)} (${esc(c.course)})` : '—';
   const opts = sel => D.clases.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${nom(c)}</option>`).join('');
   const del = (t, c, v) => `<button class="pill dan" aria-label="Borrar" onclick="borrar('${t}','${c}','${v}')">${ic('trash', 16)}</button>`;
@@ -329,7 +340,7 @@ async function vistaAdmin(p) {
       + (D.clases.map(c => `<div class="card row"><div><b>${esc(c.name)}</b><div class="meta">Curso ${esc(c.course)} · ${D.kids.filter(h => h.class_id === c.id).length} alumnos</div></div>${del('classes', 'id', c.id)}</div>`).join('') || '<div class="card vacio">Pulsa + para crear la primera clase.</div>');
     if (tab === 'equipo') body = D.perfs.map((x, i) => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(x.full_name[0]?.toUpperCase())}</div>
       <div><b>${esc(x.full_name)}</b><div class="meta">${esc(x.email || 'sin correo guardado')}</div></div></div>
-      <div class="btns" style="margin:0;flex-wrap:nowrap"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button></div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>';
+      <div class="btns" style="margin:0;justify-content:flex-end"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button>${x.id === D.me ? '' : `<button class="pill dan" aria-label="Eliminar usuario" onclick="borrarUsuario(${i})">${ic('trash', 15)}</button>`}</div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>';
     const hero = `${hola(p.full_name)}<div class="stats"><div><b>${D.invs.length}</b>familias</div><div><b>${D.kids.length}</b>alumnos</div><div><b>${(acts || []).length}</b>actividades</div></div>`;
     shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'cal', l: 'Agenda' }, { id: 'clases', i: 'book', l: 'Clases' }, { id: 'equipo', i: 'shield', l: 'Equipo' }],
       { familias: 'addFam', alumnos: 'addAlumno', actividades: 'addAct', clases: 'addClase', equipo: 'addAdmin' }[tab], keep);
@@ -415,6 +426,12 @@ function addAct() {
     return {};
   });
 }
+async function borrarUsuario(i) {
+  const x = D.perfs[i];
+  if (!confirm('¿Eliminar la cuenta de ' + x.full_name + (x.email ? ' (' + x.email + ')' : '') + '? Podrá volver a registrarse con su código y sus alumnos se mantienen.')) return;
+  const { error } = await sb.rpc('borrar_usuario', { p_id: x.id });
+  error ? alert(error.message) : ruta2();
+}
 function addAdmin() {
   sheet('Nuevo administrador', `<form><p class="meta">La persona debe estar ya registrada en la app.</p><label>Correo</label><input id="ae" type="email" required>
   <button class="btn">Dar permisos</button><p id="m" class="msg"></p></form>`);
@@ -492,6 +509,7 @@ async function avisar(id) {
 }
 
 sb.auth.onAuthStateChange((ev, s) => {
+  if (registrando) return;
   if (ev === 'PASSWORD_RECOVERY') recovery = true;
   if (recovery && s) return void setTimeout(vistaNuevaClave, 0);
   if (['SIGNED_IN', 'SIGNED_OUT', 'INITIAL_SESSION'].includes(ev)) setTimeout(() => ruta(s), 0);
