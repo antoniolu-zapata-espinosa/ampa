@@ -104,6 +104,9 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--mar2);backg
 .logo{animation:pop .7s cubic-bezier(.2,1.4,.4,1) both}
 @keyframes pop{from{transform:scale(.3) rotate(-20deg);opacity:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+body.admin .sh .btn{background:linear-gradient(135deg,#0E2A47,#2F6296);box-shadow:0 10px 22px #0e2a4744}
+body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 </style>
 </head>
 <body>
@@ -141,7 +144,7 @@ let tab = null, D = {}, recovery = /type=recovery/.test(location.hash);
 
 /* ---------- Estructura de la app ---------- */
 function shell(role, hero, body, tabs, fab) {
-  app.className = role;
+  app.className = role; document.body.className = role;
   app.innerHTML = `<div class="hero"><div class="top"><span>AMPA · Murcia</span><span style="display:flex;gap:8px"><button class="ib" aria-label="Cambiar contraseña" onclick="cambiarClave()">${ic('key', 20)}</button><button class="ib" aria-label="Salir" onclick="salir()">${ic('out', 20)}</button></span></div>${hero}</div>
   <div class="body">${body}</div>
   ${fab ? `<div class="fabwrap"><button class="fab" aria-label="Añadir" onclick="${fab}()">${ic('plus', 28)}</button></div>` : ''}
@@ -157,7 +160,7 @@ const hora = a => new Date(a.starts_at).toLocaleTimeString('es-ES', { hour: '2-d
 
 /* ---------- Acceso ---------- */
 function vistaAcceso(modo = 'entrar') {
-  app.className = 'auth';
+  app.className = 'auth'; document.body.className = '';
   app.innerHTML = `<div class="splash"><div class="logo">${ic('book', 36)}</div><h1>AMPA</h1><p>Región de Murcia · actividades de tu clase</p></div>
   <div class="authcard"><div class="seg"><button class="${modo === 'entrar' ? 'on' : ''}" onclick="vistaAcceso('entrar')">Entrar</button>
   <button class="${modo === 'alta' ? 'on' : ''}" onclick="vistaAcceso('alta')">Tengo un código</button></div>
@@ -167,8 +170,8 @@ function vistaAcceso(modo = 'entrar') {
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form></div>`;
   $('#f').onsubmit = async e => {
-    e.preventDefault(); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
-    if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, 'Correo o contraseña incorrectos.'); return; }
+    e.preventDefault(); if (SB_URL.includes('TU-PROYECTO')) return msg($('#m'), 'Falta configurar SB_URL y SB_KEY en index.html.'); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
+    if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
     const code = $('#cod').value.trim().toUpperCase();
     const { data: valido } = await sb.rpc('check_invitation', { p_code: code });
     if (!valido) return msg(m, 'Ese código no es válido o ya se ha usado.');
@@ -181,22 +184,30 @@ function vistaAcceso(modo = 'entrar') {
 
 async function ruta(session) {
   if (!session) return vistaAcceso();
-  let { data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  let { data: perfil, error: ep } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (ep) return vistaError(ep.message);
   if (!perfil) {
     const code = localStorage.getItem('ampa_code');
     if (code) { const { error } = await sb.rpc('claim_invitation', { p_code: code }); localStorage.removeItem('ampa_code');
       if (!error) ({ data: perfil } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle()); }
   }
-  if (!perfil) return vistaSinCodigo();
+  if (!perfil) return vistaSinCodigo(session.user.email);
   perfil.role === 'admin' ? vistaAdmin(perfil) : vistaFamilia(perfil);
 }
 async function ruta2() { const { data } = await sb.auth.getSession(); ruta(data.session); }
 
-function vistaSinCodigo() {
-  app.className = 'auth';
-  app.innerHTML = `<div class="splash"><div class="logo">${ic('book', 36)}</div><h1>Casi listo</h1><p>Escribe el código que te dio el AMPA para vincular tu cuenta.</p></div>
+function vistaError(m) {
+  app.className = 'auth'; document.body.className = '';
+  app.innerHTML = `<div class="splash"><div class="logo">${ic('bell', 36)}</div><h1>Algo falla</h1><p>No se pudo leer tu perfil en la base de datos: ${esc(m)}</p></div>
+  <div class="authcard"><button class="btn" onclick="ruta2()">Reintentar</button>
+  <button class="btn" style="background:var(--fondo);color:var(--tinta);box-shadow:none" onclick="salir()">Salir</button></div>`;
+}
+function vistaSinCodigo(email) {
+  app.className = 'auth'; document.body.className = '';
+  app.innerHTML = `<div class="splash"><div class="logo">${ic('book', 36)}</div><h1>Casi listo</h1><p>Has entrado como <b>${esc(email)}</b>. Escribe el código que te dio el AMPA para vincular tu cuenta.</p></div>
   <div class="authcard"><form id="f"><label>Código del AMPA</label><input id="cod" required autocapitalize="characters" style="text-transform:uppercase">
-  <button class="btn">Vincular</button><p id="m" class="msg"></p></form><button class="btn" style="background:var(--fondo);color:var(--tinta)" onclick="salir()">Salir</button></div>`;
+  <button class="btn">Vincular</button><p id="m" class="msg"></p></form><button class="btn" style="background:var(--fondo);color:var(--tinta);box-shadow:none" onclick="salir()">Salir</button>
+  <p class="meta" style="margin:14px 0 0">¿Eres administrador del AMPA? Entonces tu cuenta aún no tiene el perfil de administrador en la base de datos.</p></div>`;
   $('#f').onsubmit = async e => { e.preventDefault();
     const { error } = await sb.rpc('claim_invitation', { p_code: $('#cod').value });
     error ? msg($('#m'), 'Código no válido o ya usado.') : ruta2(); };
@@ -318,7 +329,7 @@ async function recuperar() {
   alert(error ? 'No se pudo enviar el correo.' : 'Si el correo existe, te hemos enviado un enlace.');
 }
 function vistaNuevaClave() {
-  app.className = 'auth';
+  app.className = 'auth'; document.body.className = '';
   app.innerHTML = `<div class="splash"><div class="logo">${ic('key', 36)}</div><h1>Nueva contraseña</h1><p>Elige una contraseña nueva para tu cuenta.</p></div>
   <div class="authcard"><form id="f"><label>Nueva contraseña</label><input id="np" type="password" minlength="6" required autocomplete="new-password">
   <button class="btn">Guardar y entrar</button><p id="m" class="msg"></p></form></div>`;
