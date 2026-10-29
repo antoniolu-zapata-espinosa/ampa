@@ -133,6 +133,10 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 .crow small{display:block;color:var(--suave);font-weight:700;font-size:.75rem}.crow b{word-break:break-word}
 .body{position:relative;z-index:2}
 .hero{padding-bottom:72px}
+.dia.ev{background:hsl(var(--k) 85% 90%);color:hsl(var(--k) 70% 26%)}
+.dia.ev.sel{background:linear-gradient(135deg,hsl(var(--k) 70% 40%),hsl(calc(var(--k) + 30) 75% 52%));color:#fff}
+.dia.fin:not(.ev){color:var(--suave)}
+.dia.hoy{box-shadow:inset 0 0 0 2px var(--mar)}
 </style>
 </head>
 <body>
@@ -206,7 +210,7 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v16</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v17</p></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (SB_URL.includes('TU-PROYECTO')) return msg($('#m'), 'Falta configurar las claves de Supabase en el archivo config.js.'); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
@@ -315,6 +319,57 @@ function calEscolar(evs, extra) {
     if (m !== mes) { mes = m; h += `<div class="sec" style="text-transform:capitalize">${m}</div>`; } h += evCard(e, extra ? extra(e) : ''); });
   return h || '<div class="card vacio">Todavía no hay fechas en el calendario escolar.</div>';
 }
+const SC = { y: new Date().getFullYear(), m: new Date().getMonth(), sel: null };
+const PRI = ['festivo', 'vacaciones', 'examen', 'evento'];
+function scMes(n) { const d = new Date(SC.y, SC.m + n, 1); SC.y = d.getFullYear(); SC.m = d.getMonth(); SC.sel = null; D.pintar && D.pintar(true); }
+function scDia(k) { SC.sel = SC.sel === k ? null : k; D.pintar && D.pintar(true); }
+function calEscolarGrid(evs, extra) {
+  const pre = SC.y + '-' + String(SC.m + 1).padStart(2, '0'), first = new Date(SC.y, SC.m, 1);
+  const off = (first.getDay() + 6) % 7, nd = new Date(SC.y, SC.m + 1, 0).getDate(), hoy = dk(new Date()), por = {};
+  evs.forEach(e => { const fin = e.ends_on && e.ends_on >= e.starts_on ? e.ends_on : e.starts_on; const d = new Date(e.starts_on + 'T12:00:00');
+    for (let i = 0; i < 400 && dk(d) <= fin; i++) { const k = dk(d); (por[k] = por[k] || []).push(e); d.setDate(d.getDate() + 1); } });
+  let celdas = '<i></i>'.repeat(off);
+  for (let d = 1; d <= nd; d++) {
+    const k = pre + '-' + String(d).padStart(2, '0'), l = por[k] || [], top = PRI.find(p => l.some(e => (e.kind || 'evento') === p));
+    celdas += `<button class="dia ${k === hoy ? 'hoy' : ''} ${k === SC.sel ? 'sel' : ''} ${(off + d - 1) % 7 > 4 ? 'fin' : ''} ${top ? 'ev' : ''}" ${top ? `style="--k:${KIND[top][1]}"` : ''} onclick="scDia('${k}')"><span>${d}</span></button>`;
+  }
+  const vistos = new Map();
+  (SC.sel ? (por[SC.sel] || []) : Object.keys(por).filter(k => k.startsWith(pre)).sort().flatMap(k => por[k])).forEach(e => vistos.set(e.id, e));
+  const lista = [...vistos.values()].sort((a, b) => a.starts_on.localeCompare(b.starts_on));
+  const titulo = SC.sel ? fmtD(SC.sel, { weekday: 'long', day: 'numeric', month: 'long' }) : 'Fechas de este mes';
+  return `<div class="card cal"><div class="calh"><button class="ib2" aria-label="Mes anterior" onclick="scMes(-1)">‹</button>
+    <b>${first.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}</b><button class="ib2" aria-label="Mes siguiente" onclick="scMes(1)">›</button></div>
+    <div class="calg">${'LMXJVSD'.split('').map(x => `<small>${x}</small>`).join('')}${celdas}</div>
+    <div style="margin-top:12px">${Object.values(KIND).map(([l, h]) => `<span class="kind" style="--k:${h}">${l}</span>`).join('')}</div>
+    ${SC.sel ? '<div class="btns"><button class="pill" onclick="scDia(null)">Ver todo el mes</button></div>' : ''}</div>
+    <div class="sec" style="text-transform:capitalize">${titulo}</div>
+    ${lista.map(e => evCard(e, extra ? extra(e) : '')).join('') || '<div class="card vacio">No hay fechas marcadas.</div>'}`;
+}
+const FESTIVOS_MU = [
+  ['Inicio de clases (Infantil y Primaria)', '2026-09-08', null, 'evento', 'Curso 2026-2027.'],
+  ['Inicio de clases (ESO y Bachillerato)', '2026-09-10', null, 'evento', null],
+  ['Fiesta Nacional de España', '2026-10-12', null, 'festivo', null],
+  ['Día del patrón escolar (Infantil y Primaria)', '2026-11-27', null, 'festivo', 'Día no lectivo.'],
+  ['Día de la Constitución (traslado)', '2026-12-07', null, 'festivo', 'El 6 de diciembre es domingo y pasa al lunes.'],
+  ['Inmaculada Concepción', '2026-12-08', null, 'festivo', null],
+  ['Día no lectivo', '2026-12-23', null, 'festivo', 'Establecido por la Consejería de Educación.'],
+  ['Vacaciones de Navidad', '2026-12-24', '2027-01-06', 'vacaciones', null],
+  ['Día del patrón (ESO y Bachillerato)', '2027-01-29', null, 'festivo', 'Día no lectivo para ESO y Bachillerato.'],
+  ['San José', '2027-03-19', null, 'festivo', null],
+  ['Vacaciones de Semana Santa', '2027-03-22', '2027-03-29', 'vacaciones', 'Incluye Jueves Santo (25 de marzo) y Viernes Santo (26 de marzo).'],
+  ['Día de la Región de Murcia', '2027-06-09', null, 'festivo', null],
+  ['Último día de clase (ESO y Bachillerato)', '2027-06-21', null, 'evento', null],
+  ['Último día de clase (Infantil y Primaria)', '2027-06-22', null, 'evento', null]];
+const CARD_FESTIVOS = `<div class="card next"><b>Festivos oficiales</b><p class="meta" style="margin:4px 0 0">Añade de una vez las fechas del curso 2026-2027 de la Región de Murcia: inicio y fin de clases, Navidad, Semana Santa y festivos. Los festivos locales de tu municipio los añades tú con «+».</p>
+  <div class="btns"><button class="pill" onclick="cargarFestivosMurcia()">Añadir festivos 2026-2027</button></div></div>`;
+async function cargarFestivosMurcia() {
+  const ya = new Set(D.cal.map(e => e.title + '|' + e.starts_on));
+  const nuevos = FESTIVOS_MU.filter(f => !ya.has(f[0] + '|' + f[1])).map(([title, starts_on, ends_on, kind, notes]) => ({ title, starts_on, ends_on, kind, notes }));
+  if (!nuevos.length) return alert('Esas fechas ya están en el calendario.');
+  if (!confirm('Se añadirán ' + nuevos.length + ' fechas oficiales del curso 2026-2027. ¿Continuar?')) return;
+  const { error } = await sb.from('school_calendar').insert(nuevos);
+  error ? alert('No se pudo añadir: ' + error.message) : ruta2();
+}
 function contactoHTML(c) {
   const dig = v => String(v || '').replace(/[^\d+]/g, ''), ig = String(c.instagram || '').replace(/^@/, '');
   const url = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
@@ -362,7 +417,7 @@ async function vistaFamilia(p) {
     if (tab === 'ampa') body = texto('ampa', 'Pronto encontrarás aquí la información del AMPA.');
     if (tab === 'colegio') body = texto('colegio', 'Pronto encontrarás aquí la información del colegio.');
     if (tab === 'agenda') body = agenda(acts || [], a => card(a, new Date(a.starts_at) >= ahora, ''), 'No hay actividades este día.');
-    if (tab === 'calendario') body = `<div class="card">${Object.values(KIND).map(([l, h]) => `<span class="kind" style="--k:${h}">${l}</span>`).join('')}</div>` + calEscolar(cal || []);
+    if (tab === 'calendario') body = calEscolarGrid(cal || []);
     if (tab === 'contacto') body = contactoHTML(C.contacto || {});
     if (tab === 'hijos') body = (hijos || []).map(h => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div><div><b>${esc(h.name)}</b><div class="meta">${esc(cl[h.class_id]?.name)} · curso ${esc(cl[h.class_id]?.course)}</div></div></div></div>`).join('')
       + '<p class="meta" style="text-align:center">La clase de cada hijo/a la gestiona el AMPA.</p>';
@@ -421,7 +476,7 @@ async function vistaAdmin(p) {
     if (tab === 'contenido') {
       body = segHTML('CT', CT.s, [['noticias', 'Noticias'], ['calendario', 'Calendario'], ['textos', 'Textos']]);
       if (CT.s === 'noticias') { fab = 'formNoticia'; body += D.news.map(newsAdmin).join('') || '<div class="card vacio">Pulsa + para publicar la primera noticia.</div>'; }
-      if (CT.s === 'calendario') { fab = 'formEvento'; body += calEscolar(D.cal, e => `<div class="btns"><button class="pill" onclick="formEvento('${e.id}')">Editar</button>${del('school_calendar', 'id', e.id)}</div>`); }
+      if (CT.s === 'calendario') { fab = 'formEvento'; body += CARD_FESTIVOS + calEscolarGrid(D.cal, e => `<div class="btns"><button class="pill" onclick="formEvento('${e.id}')">Editar</button>${del('school_calendar', 'id', e.id)}</div>`); }
       if (CT.s === 'textos') body += [['ampa', 'AMPA'], ['colegio', 'Info del colegio'], ['contacto', 'Contacto']].map(([k, l]) => `<div class="card"><div class="row"><b>${l}</b><button class="pill" onclick="formTexto('${k}')">Editar</button></div><p class="meta" style="margin:8px 0 0">${resumen(k)}</p></div>`).join('');
     }
     if (tab === 'ajustes') {
@@ -491,7 +546,7 @@ function formNoticia(id) {
 function formEvento(id) {
   const e = id ? D.cal.find(x => x.id === id) : null;
   sheet(e ? 'Editar fecha' : 'Nueva fecha del calendario', `<form><label>Título</label><input id="et" required value="${esc(e?.title)}">
-  <div class="grid2"><div><label>Desde</label><input id="ed" type="date" required value="${e?.starts_on || ''}"></div><div><label>Hasta (opcional)</label><input id="eh" type="date" value="${e?.ends_on || ''}"></div></div>
+  <div class="grid2"><div><label>Desde</label><input id="ed" type="date" required value="${e?.starts_on || SC.sel || ''}"></div><div><label>Hasta (opcional)</label><input id="eh" type="date" value="${e?.ends_on || ''}"></div></div>
   <label>Tipo</label><select id="ek">${Object.entries(KIND).map(([k, v]) => `<option value="${k}" ${(e?.kind || 'evento') === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
   <label>Notas (opcional)</label><textarea id="en" rows="3">${esc(e?.notes)}</textarea><button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
   form(() => { const v = { title: $('#et').value.trim(), starts_on: $('#ed').value, ends_on: $('#eh').value || null, kind: $('#ek').value, notes: $('#en').value.trim() || null };
