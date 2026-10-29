@@ -402,7 +402,7 @@ async function vistaFamilia(p) {
     ${ab ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
       return `<button class="pill ${on ? 'on' : ''}" onclick="inscribir('${a.id}','${h.id}',${on})">${on ? '✓ ' + esc(h.name) : 'Inscribir a ' + esc(h.name)}</button>`; }).join('') || '<span class="meta">Tus hijos/as aparecerán aquí cuando el AMPA los asigne a una clase.</span>'}</div>` : ''}
     </div></div>`; };
-  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos' };
+  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda de Actividades', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos' };
   const TILES = [['noticias', 'news', 200], ['ampa', 'heart', 340], ['colegio', 'school', 25], ['agenda', 'cal', 165], ['calendario', 'cal2', 265], ['contacto', 'phone', 140], ['hijos', 'kid', 45]];
   const texto = (k, vacio) => `<div class="card">${C[k]?.texto ? `<p style="margin:0">${nl(C[k].texto)}</p>` : `<p class="vacio" style="margin:0">${vacio}</p>`}</div>`;
   D.pintar = keep => {
