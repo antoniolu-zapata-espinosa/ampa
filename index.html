@@ -131,6 +131,8 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 .card h2+.crow{border-top:0}
 .cic{width:42px;height:42px;flex:0 0 42px;border-radius:14px;background:linear-gradient(145deg,var(--mar),var(--mar2));color:#fff;display:grid;place-items:center}
 .crow small{display:block;color:var(--suave);font-weight:700;font-size:.75rem}.crow b{word-break:break-word}
+.body{position:relative;z-index:2}
+.hero{padding-bottom:72px}
 </style>
 </head>
 <body>
@@ -204,7 +206,7 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v15</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v16</p></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (SB_URL.includes('TU-PROYECTO')) return msg($('#m'), 'Falta configurar las claves de Supabase en el archivo config.js.'); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
