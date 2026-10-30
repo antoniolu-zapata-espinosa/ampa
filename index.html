@@ -9,10 +9,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AMPA Murcia">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <title>AMPA Murcia</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="config.js"></script>
+<script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 :root{--tinta:#0E2A47;--mar:#0F6E7C;--mar2:#19B3A6;--limon:#FFC83D;--fondo:#F2F5FA;--suave:#6B7C93;--error:#D6362B;
@@ -145,6 +146,10 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 // Las claves de Supabase se escriben UNA sola vez en el archivo config.js (no aquí).
 const SB_URL = (window.AMPA_CONFIG || {}).SB_URL || 'https://TU-PROYECTO.supabase.co';
 const SB_KEY = (window.AMPA_CONFIG || {}).SB_KEY || 'TU_CLAVE_ANON_PUBLICA';
+const cfgEstado = () => !window.AMPA_CONFIG
+  ? 'No se encuentra o no se puede leer config.js (ni junto a index.html ni dentro de la carpeta js): comprueba el nombre exacto y que no tiene errores de comillas.'
+  : (SB_URL.includes('TU-PROYECTO') || SB_KEY.includes('TU_CLAVE') || !/^https:\/\/.+/.test(SB_URL))
+    ? 'config.js se carga, pero la URL o la clave siguen siendo las de ejemplo, o la URL no es válida.' : '';
 const sb = supabase.createClient(SB_URL, SB_KEY);
 const $ = s => document.querySelector(s), app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -211,9 +216,9 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v19</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${cfgEstado() ? 'Sin configurar (config.js)' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v22</p></div>`;
   $('#f').onsubmit = async e => {
-    e.preventDefault(); if (SB_URL.includes('TU-PROYECTO')) return msg($('#m'), 'Falta configurar las claves de Supabase en el archivo config.js.'); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
+    e.preventDefault(); if (cfgEstado()) return msg($('#m'), cfgEstado()); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
     const code = $('#cod').value.trim().toUpperCase();
     const { data: valido } = await sb.rpc('check_invitation', { p_code: code });
