@@ -12,6 +12,6 @@ jobs:
     steps:
       - name: Consulta a la Base de Datos
         run: |
-          curl -s "${{ secrets.SUPABASE_URL }}/rest/v1/NOMBRE_DE_TU_TABLA?limit=1" \
+          curl -s "${{ secrets.SUPABASE_URL }}/rest/v1/children?limit=1" \
           -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
           -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
