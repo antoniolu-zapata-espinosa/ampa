@@ -415,7 +415,7 @@ async function vistaFamilia(p) {
   const card = (a, ab, cls) => {
     const hs = (hijos || []).filter(h => !a.class_id || h.class_id === a.class_id), fs = (files || []).filter(f => f.activity_id === a.id);
     return `<div class="card act ${cls}" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai">${cls === 'next' ? '<div class="tag">Lo siguiente</div>' : ''}<h3>${esc(a.title)}</h3>
-    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? esc(cl[a.class_id]?.name) : 'Todo el colegio'}</div>
+    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? esc(cl[a.class_id]?.name) : 'Todas las Clases'}</div>
     ${a.description ? `<p style="margin:6px 0 0">${esc(a.description)}</p>` : ''}
     ${fs.length ? `<div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}</div>` : ''}
     ${ab ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
@@ -477,7 +477,7 @@ async function vistaAdmin(p) {
     <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
     <div><label>Familia</label><select class="mini" onchange="asignarAlumno('${h.id}',this.value)">${famOpts(h)}</select></div></div></div>`;
   const actAdmin = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
-    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? nom(cl[a.class_id]) : 'Todo el colegio'}</div>
+    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? nom(cl[a.class_id]) : 'Todas las Clases'}</div>
     <div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
     <div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}
     <label class="pill" style="margin:0">${ic('plus', 15)}Adjuntar<input type="file" multiple hidden onchange="subirA('${a.id}',this.files)"></label>
@@ -603,7 +603,7 @@ function nuevoCurso() {
 }
 function addAct() {
   sheet('Nueva actividad', `<form><label>¿Para quién es?</label>
-  <label class="ck"><input type="checkbox" id="atodo" onchange="document.querySelectorAll('.ac-cl').forEach(x => { x.disabled = this.checked; if (this.checked) x.checked = false; })">Todo el colegio (todas las familias)</label>
+  <label class="ck"><input type="checkbox" id="atodo" onchange="document.querySelectorAll('.ac-cl').forEach(x => { x.disabled = this.checked; if (this.checked) x.checked = false; })">Todas las Clases (todas las familias)</label>
   ${D.clases.map(c => `<label class="ck"><input type="checkbox" class="ac-cl" value="${c.id}" ${c.id === AF.c ? 'checked' : ''}>${esc(c.name)} (${esc(c.course)})</label>`).join('')}
   <p class="meta" style="margin:4px 0 0">Solo la verán las familias con alumnos en las clases que marques.</p>
   <label>Título</label><input id="at" required><label>Fecha y hora</label><input id="af" type="datetime-local" value="${AG.sel ? AG.sel + 'T16:00' : ''}" required><label>Lugar</label><input id="al">
@@ -612,7 +612,7 @@ function addAct() {
   <button class="btn">Publicar</button><p id="m" class="msg"></p></form>`);
   form(async () => {
     const ids = $('#atodo').checked ? [null] : [...document.querySelectorAll('.ac-cl:checked')].map(x => x.value);
-    if (!ids.length) return { error: { message: 'Elige al menos una clase o «Todo el colegio».' } };
+    if (!ids.length) return { error: { message: 'Elige al menos una clase o «Todas las Clases».' } };
     const base = { title: $('#at').value.trim(), place: $('#al').value.trim() || null, description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() };
     const { data, error } = await sb.from('activities').insert(ids.map(c => ({ ...base, class_id: c }))).select('id');
     if (error) return { error };
@@ -625,7 +625,7 @@ function addAct() {
 function editAct(id) {
   const a = D.acts.find(x => x.id === id), l = new Date(a.starts_at), p2 = n => String(n).padStart(2, '0');
   const dt = l.getFullYear() + '-' + p2(l.getMonth() + 1) + '-' + p2(l.getDate()) + 'T' + p2(l.getHours()) + ':' + p2(l.getMinutes());
-  sheet('Editar actividad', `<form><label>¿Para quién es?</label><select id="ec"><option value="">Todo el colegio</option>${D.clases.map(c => `<option value="${c.id}" ${c.id === a.class_id ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  sheet('Editar actividad', `<form><label>¿Para quién es?</label><select id="ec"><option value="">Todas las Clases</option>${D.clases.map(c => `<option value="${c.id}" ${c.id === a.class_id ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
   <label>Título</label><input id="et2" required value="${esc(a.title)}"><label>Fecha y hora</label><input id="ef" type="datetime-local" required value="${dt}"><label>Lugar</label><input id="el" value="${esc(a.place)}">
   <label>Descripción</label><textarea id="ed2" rows="3">${esc(a.description)}</textarea><button class="btn">Guardar cambios</button><p id="m" class="msg"></p></form>`);
   form(() => sb.from('activities').update({ class_id: $('#ec').value || null, title: $('#et2').value.trim(), starts_at: new Date($('#ef').value).toISOString(),
