@@ -1,0 +1,17 @@
+name: Mantener Supabase Activo
+
+on:
+  schedule:
+    # Se ejecuta todos los lunes y jueves a las 12:00 UTC (Suficiente para ganarle a los 7 días)
+    - cron: '0 12 * * 1,4'
+  workflow_dispatch: # Te permite ejecutarlo manualmente desde GitHub si quieres
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta a la Base de Datos
+        run: |
+          curl -s "${{ secrets.SUPABASE_URL }}/rest/v1/NOMBRE_DE_TU_TABLA?limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
