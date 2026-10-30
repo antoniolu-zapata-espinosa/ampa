@@ -8,11 +8,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AMPA Murcia">
-<link rel="manifest" href="data/json/manifest.json">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>AMPA Murcia</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="js/config.js"></script>
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 :root{--tinta:#0E2A47;--mar:#0F6E7C;--mar2:#19B3A6;--limon:#FFC83D;--fondo:#F2F5FA;--suave:#6B7C93;--error:#D6362B;
@@ -177,7 +177,8 @@ const IC = {
  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
  chat:'<path d="M21 12a8 8 0 0 1-11.7 7L4 20l1.1-4.4A8 8 0 1 1 21 12z"/>',
  insta:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>',
- gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'};
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'};
 const ic = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const hola = n => { const h = new Date().getHours(); return `<div class="sol">${ic(h < 6 || h >= 21 ? 'moon' : 'sun', 26)}</div><div class="hi">${saludo()},<br>${esc(n)}</div>`; };
@@ -210,7 +211,7 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v17</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${SB_URL.includes('TU-PROYECTO') ? 'Sin configurar: falta config.js' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v19</p></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (SB_URL.includes('TU-PROYECTO')) return msg($('#m'), 'Falta configurar las claves de Supabase en el archivo config.js.'); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
@@ -370,6 +371,19 @@ async function cargarFestivosMurcia() {
   const { error } = await sb.from('school_calendar').insert(nuevos);
   error ? alert('No se pudo añadir: ' + error.message) : ruta2();
 }
+const AGL = { v: 'proximas' };
+function agendaLista(acts, cardFn, vacio) {
+  const ini = new Date(); ini.setHours(0, 0, 0, 0);
+  const prox = AGL.v === 'proximas';
+  const l = acts.filter(a => (new Date(a.starts_at) >= ini) === prox).sort((a, b) => (new Date(a.starts_at) - new Date(b.starts_at)) * (prox ? 1 : -1));
+  const hoy = dk(new Date()), man = dk(new Date(Date.now() + 864e5)); let k0 = '', h = '';
+  l.forEach(a => { const k = dk(new Date(a.starts_at));
+    if (k !== k0) { k0 = k; h += `<div class="sec" style="text-transform:capitalize">${k === hoy ? 'Hoy · ' : k === man ? 'Mañana · ' : ''}${fmtD(k, { weekday: 'long', day: 'numeric', month: 'long' })}</div>`; }
+    h += cardFn(a); });
+  return `<div class="card"><div class="seg"><button class="${prox ? 'on' : ''}" onclick="AGL.v='proximas';D.pintar(true)">Próximas</button>
+    <button class="${prox ? '' : 'on'}" onclick="AGL.v='pasadas';D.pintar(true)">Anteriores</button></div></div>`
+    + (h || `<div class="card vacio">${prox ? vacio : 'Todavía no hay actividades anteriores.'}</div>`);
+}
 function contactoHTML(c) {
   const dig = v => String(v || '').replace(/[^\d+]/g, ''), ig = String(c.instagram || '').replace(/^@/, '');
   const url = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
@@ -394,16 +408,16 @@ async function vistaFamilia(p) {
   const cl = Object.fromEntries((clases || []).map(c => [c.id, c])), ins = new Set((insc || []).map(i => i.activity_id + '|' + i.child_id));
   const ahora = Date.now(), prox = (acts || []).filter(a => new Date(a.starts_at) >= ahora);
   const card = (a, ab, cls) => {
-    const hs = (hijos || []).filter(h => h.class_id === a.class_id), fs = (files || []).filter(f => f.activity_id === a.id);
+    const hs = (hijos || []).filter(h => !a.class_id || h.class_id === a.class_id), fs = (files || []).filter(f => f.activity_id === a.id);
     return `<div class="card act ${cls}" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai">${cls === 'next' ? '<div class="tag">Lo siguiente</div>' : ''}<h3>${esc(a.title)}</h3>
-    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${esc(cl[a.class_id]?.name)}</div>
+    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? esc(cl[a.class_id]?.name) : 'Todo el colegio'}</div>
     ${a.description ? `<p style="margin:6px 0 0">${esc(a.description)}</p>` : ''}
     ${fs.length ? `<div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}</div>` : ''}
     ${ab ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
       return `<button class="pill ${on ? 'on' : ''}" onclick="inscribir('${a.id}','${h.id}',${on})">${on ? '✓ ' + esc(h.name) : 'Inscribir a ' + esc(h.name)}</button>`; }).join('') || '<span class="meta">Tus hijos/as aparecerán aquí cuando el AMPA los asigne a una clase.</span>'}</div>` : ''}
     </div></div>`; };
-  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda de Actividades', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos' };
-  const TILES = [['noticias', 'news', 200], ['ampa', 'heart', 340], ['colegio', 'school', 25], ['agenda', 'cal', 165], ['calendario', 'cal2', 265], ['contacto', 'phone', 140], ['hijos', 'kid', 45]];
+  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda de actividades', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos' };
+  const TILES = [['noticias', 'news', 200], ['ampa', 'heart', 340], ['colegio', 'school', 25], ['agenda', 'list', 165], ['calendario', 'cal2', 265], ['contacto', 'phone', 140], ['hijos', 'kid', 45]];
   const texto = (k, vacio) => `<div class="card">${C[k]?.texto ? `<p style="margin:0">${nl(C[k].texto)}</p>` : `<p class="vacio" style="margin:0">${vacio}</p>`}</div>`;
   D.pintar = keep => {
     const hero = tab === 'inicio' ? `${hola(p.full_name)}<div>${(clases || []).map(c => `<span class="chip">${esc(c.name)} · ${esc(c.course)}</span>`).join('')}</div>`
@@ -416,18 +430,18 @@ async function vistaFamilia(p) {
     if (tab === 'noticias') body = (noti || []).map(n => newsCard(n, cl)).join('') || '<div class="card vacio">Todavía no hay noticias.</div>';
     if (tab === 'ampa') body = texto('ampa', 'Pronto encontrarás aquí la información del AMPA.');
     if (tab === 'colegio') body = texto('colegio', 'Pronto encontrarás aquí la información del colegio.');
-    if (tab === 'agenda') body = agenda(acts || [], a => card(a, new Date(a.starts_at) >= ahora, ''), 'No hay actividades este día.');
+    if (tab === 'agenda') body = agendaLista(acts || [], a => card(a, new Date(a.starts_at) >= ahora, ''), 'Todavía no hay actividades próximas para tu clase.');
     if (tab === 'calendario') body = calEscolarGrid(cal || []);
     if (tab === 'contacto') body = contactoHTML(C.contacto || {});
     if (tab === 'hijos') body = (hijos || []).map(h => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div><div><b>${esc(h.name)}</b><div class="meta">${esc(cl[h.class_id]?.name)} · curso ${esc(cl[h.class_id]?.course)}</div></div></div></div>`).join('')
       + '<p class="meta" style="text-align:center">La clase de cada hijo/a la gestiona el AMPA.</p>';
-    shell('family', hero, body, [{ id: 'inicio', i: 'home', l: 'Inicio' }, { id: 'noticias', i: 'news', l: 'Noticias' }, { id: 'agenda', i: 'cal', l: 'Agenda' }, { id: 'contacto', i: 'phone', l: 'Contacto' }], '', keep);
+    shell('family', hero, body, [{ id: 'inicio', i: 'home', l: 'Inicio' }, { id: 'noticias', i: 'news', l: 'Noticias' }, { id: 'agenda', i: 'list', l: 'Actividades' }, { id: 'contacto', i: 'phone', l: 'Contacto' }], '', keep);
   };
   D.pintar();
 }
 
 /* ---------- App de administración ---------- */
-const AL = { c: '' }, CT = { s: 'noticias' }, AJ = { s: 'clases' };
+const AL = { c: '' }, AF = { c: '' }, CT = { s: 'noticias' }, AJ = { s: 'clases' };
 const segHTML = (n, cur, items) => `<div class="card"><div class="seg">${items.map(([v, l]) => `<button class="${cur === v ? 'on' : ''}" onclick="${n}.s='${v}';D.pintar(true)">${l}</button>`).join('')}</div></div>`;
 function famOpts(h) {
   return '<option value="">Sin familia</option>' + (D.invs || []).map(i => { const v = i.used_by ? 'p:' + i.used_by : 'c:' + i.code;
@@ -441,7 +455,7 @@ async function vistaAdmin(p) {
     sb.from('activities').select('*').order('starts_at'), sb.from('enrollments').select('activity_id, children(name)'), sb.from('activity_files').select('*'),
     sb.from('profiles').select('*').order('role').order('full_name'), sb.from('children').select('*').eq('active', true).order('name'),
     sb.from('news').select('*').order('pinned', { ascending: false }).order('published_at', { ascending: false }), sb.from('school_calendar').select('*').order('starts_on'), sb.from('site_content').select('*')]);
-  D = { me: p.id, clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [], news: news || [], cal: cal || [], cont: Object.fromEntries((cont || []).map(r => [r.key, r.data || {}])) };
+  D = { me: p.id, acts: acts || [], clases: clases || [], perfs: perfs || [], kids: kids || [], invs: invs || [], news: news || [], cal: cal || [], cont: Object.fromEntries((cont || []).map(r => [r.key, r.data || {}])) };
   const cl = Object.fromEntries(D.clases.map(c => [c.id, c])), nom = c => c ? `${esc(c.name)} (${esc(c.course)})` : '—';
   const opts = sel => D.clases.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${nom(c)}</option>`).join('');
   const del = (t, c, v) => `<button class="pill dan" aria-label="Borrar" onclick="borrar('${t}','${c}','${v}')">${ic('trash', 16)}</button>`;
@@ -458,11 +472,11 @@ async function vistaAdmin(p) {
     <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
     <div><label>Familia</label><select class="mini" onchange="asignarAlumno('${h.id}',this.value)">${famOpts(h)}</select></div></div></div>`;
   const actAdmin = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
-    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${nom(cl[a.class_id])}</div>
+    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? nom(cl[a.class_id]) : 'Todo el colegio'}</div>
     <div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
     <div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}
     <label class="pill" style="margin:0">${ic('plus', 15)}Adjuntar<input type="file" multiple hidden onchange="subirA('${a.id}',this.files)"></label>
-    <button class="pill" onclick="avisar('${a.id}')">${ic('bell', 15)}Avisar</button>${del('activities', 'id', a.id)}</div></div></div>`; };
+    <button class="pill" onclick="editAct('${a.id}')">Editar</button><button class="pill" onclick="avisar('${a.id}')">${ic('bell', 15)}Avisar</button>${del('activities', 'id', a.id)}</div></div></div>`; };
   const newsAdmin = n => `<div class="card"><div class="row"><div><b>${esc(n.title)}</b><div class="meta">${n.pinned ? 'Fijada · ' : ''}${fmtD(n.published_at, { day: 'numeric', month: 'short', year: 'numeric' })} · ${n.class_id ? esc(cl[n.class_id]?.name) : 'Todas las familias'}</div></div>
     <span class="row" style="gap:6px"><button class="pill" onclick="formNoticia('${n.id}')">Editar</button>${del('news', 'id', n.id)}</span></div>${n.body ? `<p class="meta" style="margin:8px 0 0">${esc(n.body.slice(0, 140))}${n.body.length > 140 ? '…' : ''}</p>` : ''}</div>`;
   const resumen = k => { const d = D.cont[k] || {}; const t = k === 'contacto' ? [d.telefono, d.email].filter(Boolean).join(' · ') : (d.texto || '').slice(0, 120); return t ? esc(t) : 'Sin contenido todavía'; };
@@ -472,7 +486,8 @@ async function vistaAdmin(p) {
     if (tab === 'familias') { fab = 'addFam'; body = D.invs.map(fam).join('') || '<div class="card vacio">Pulsa + para añadir una familia. También puedes crear antes a los alumnos en la pestaña Alumnos.</div>'; }
     if (tab === 'alumnos') { fab = 'addAlumno'; body = `<div class="card"><select onchange="AL.c=this.value;D.pintar(true)"><option value="">Todas las clases</option>${opts(AL.c)}</select></div>`
       + (D.kids.filter(h => !AL.c || h.class_id === AL.c).map(alu).join('') || '<div class="card vacio">Pulsa + para añadir alumnos. No hace falta que su familia exista todavía.</div>'); }
-    if (tab === 'actividades') { fab = 'addAct'; body = agenda(acts || [], actAdmin, 'No hay actividades este día. Pulsa + para crear una.'); }
+    if (tab === 'actividades') { fab = 'addAct'; body = `<div class="card"><select onchange="AF.c=this.value;D.pintar(true)"><option value="">Ver todas las clases</option>${opts(AF.c)}</select></div>`
+      + agendaLista((acts || []).filter(a => !AF.c || !a.class_id || a.class_id === AF.c), actAdmin, 'No hay actividades próximas. Pulsa + para crear una.'); }
     if (tab === 'contenido') {
       body = segHTML('CT', CT.s, [['noticias', 'Noticias'], ['calendario', 'Calendario'], ['textos', 'Textos']]);
       if (CT.s === 'noticias') { fab = 'formNoticia'; body += D.news.map(newsAdmin).join('') || '<div class="card vacio">Pulsa + para publicar la primera noticia.</div>'; }
@@ -489,7 +504,7 @@ async function vistaAdmin(p) {
         <div class="btns" style="margin:0;justify-content:flex-end"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button>${x.id === D.me ? '' : `<button class="pill dan" aria-label="Eliminar usuario" onclick="borrarUsuario(${i})">${ic('trash', 15)}</button>`}</div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>'; }
     }
     const hero = `${hola(p.full_name)}<div class="stats"><div><b>${D.invs.length}</b>familias</div><div><b>${D.kids.length}</b>alumnos</div><div><b>${(acts || []).length}</b>actividades</div></div>`;
-    shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'cal', l: 'Agenda' }, { id: 'contenido', i: 'news', l: 'Contenido' }, { id: 'ajustes', i: 'gear', l: 'Ajustes' }], fab, keep);
+    shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'list', l: 'Actividades' }, { id: 'contenido', i: 'news', l: 'Contenido' }, { id: 'ajustes', i: 'gear', l: 'Ajustes' }], fab, keep);
   };
   D.pintar();
 }
@@ -582,20 +597,34 @@ function nuevoCurso() {
   });
 }
 function addAct() {
-  sheet('Nueva actividad', `<form><label>Clase</label><select id="ac" required>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  sheet('Nueva actividad', `<form><label>¿Para quién es?</label>
+  <label class="ck"><input type="checkbox" id="atodo" onchange="document.querySelectorAll('.ac-cl').forEach(x => { x.disabled = this.checked; if (this.checked) x.checked = false; })">Todo el colegio (todas las familias)</label>
+  ${D.clases.map(c => `<label class="ck"><input type="checkbox" class="ac-cl" value="${c.id}" ${c.id === AF.c ? 'checked' : ''}>${esc(c.name)} (${esc(c.course)})</label>`).join('')}
+  <p class="meta" style="margin:4px 0 0">Solo la verán las familias con alumnos en las clases que marques.</p>
   <label>Título</label><input id="at" required><label>Fecha y hora</label><input id="af" type="datetime-local" value="${AG.sel ? AG.sel + 'T16:00' : ''}" required><label>Lugar</label><input id="al">
   <label>Descripción</label><textarea id="ad" rows="3"></textarea><label>Adjuntos (PDF, imágenes)</label><input id="aa" type="file" multiple accept=".pdf,image/*">
-  <label class="ck"><input id="an" type="checkbox">Avisar por correo a las familias de la clase</label>
+  <label class="ck"><input id="an" type="checkbox">Avisar por correo a las familias</label>
   <button class="btn">Publicar</button><p id="m" class="msg"></p></form>`);
   form(async () => {
-    const { data, error } = await sb.from('activities').insert({ class_id: $('#ac').value, title: $('#at').value.trim(), place: $('#al').value.trim() || null,
-      description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() }).select('id').single();
+    const ids = $('#atodo').checked ? [null] : [...document.querySelectorAll('.ac-cl:checked')].map(x => x.value);
+    if (!ids.length) return { error: { message: 'Elige al menos una clase o «Todo el colegio».' } };
+    const base = { title: $('#at').value.trim(), place: $('#al').value.trim() || null, description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() };
+    const { data, error } = await sb.from('activities').insert(ids.map(c => ({ ...base, class_id: c }))).select('id');
     if (error) return { error };
-    const r = await subir(data.id, $('#aa').files); if (r.error) return r;
-    if ($('#an').checked) { const { error: e2 } = await sb.functions.invoke('notify-activity', { body: { activity_id: data.id } });
+    for (const a of data) { const r = await subir(a.id, $('#aa').files); if (r.error) return r; }
+    if ($('#an').checked) for (const a of data) { const { error: e2 } = await sb.functions.invoke('notify-activity', { body: { activity_id: a.id } });
       if (e2) return { error: { message: 'Se creó, pero no se pudo enviar el correo.' } }; }
     return {};
   });
+}
+function editAct(id) {
+  const a = D.acts.find(x => x.id === id), l = new Date(a.starts_at), p2 = n => String(n).padStart(2, '0');
+  const dt = l.getFullYear() + '-' + p2(l.getMonth() + 1) + '-' + p2(l.getDate()) + 'T' + p2(l.getHours()) + ':' + p2(l.getMinutes());
+  sheet('Editar actividad', `<form><label>¿Para quién es?</label><select id="ec"><option value="">Todo el colegio</option>${D.clases.map(c => `<option value="${c.id}" ${c.id === a.class_id ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  <label>Título</label><input id="et2" required value="${esc(a.title)}"><label>Fecha y hora</label><input id="ef" type="datetime-local" required value="${dt}"><label>Lugar</label><input id="el" value="${esc(a.place)}">
+  <label>Descripción</label><textarea id="ed2" rows="3">${esc(a.description)}</textarea><button class="btn">Guardar cambios</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.from('activities').update({ class_id: $('#ec').value || null, title: $('#et2').value.trim(), starts_at: new Date($('#ef').value).toISOString(),
+    place: $('#el').value.trim() || null, description: $('#ed2').value.trim() || null }).eq('id', id));
 }
 async function borrarUsuario(i) {
   const x = D.perfs[i];
