@@ -163,12 +163,12 @@ const cfgEstado = () => !window.AMPA_CONFIG
   ? 'No se encuentra o no se puede leer config.js (ni junto a index.html ni dentro de la carpeta js): comprueba el nombre exacto y que no tiene errores de comillas.'
   : (SB_URL.includes('TU-PROYECTO') || SB_KEY.includes('TU_CLAVE') || !/^https:\/\/.+/.test(SB_URL))
     ? 'config.js se carga, pero la URL o la clave siguen siendo las de ejemplo, o la URL no es válida.' : '';
-const sb = supabase.createClient(SB_URL, SB_KEY);
+const sb = window.supabase ? supabase.createClient(SB_URL, SB_KEY) : null;
 const $ = s => document.querySelector(s), app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const saludo = () => { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches'; };
 const msg = (el, t, ok) => { el.className = 'msg ' + (ok ? 'ok' : 'err'); el.textContent = t; };
-const salir = () => { tab = null; sb.auth.signOut(); };
+const salir = () => { tab = null; try { localStorage.removeItem('ampa_carnet'); } catch (e) {} sb.auth.signOut(); };
 const IC = {
  home:'<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 0 1 0 7M19 15c2 .8 3 2.6 3 6"/>',
@@ -230,7 +230,7 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${cfgEstado() ? 'Sin configurar (config.js)' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v24</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${cfgEstado() ? 'Sin configurar (config.js)' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v25</p></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (cfgEstado()) return msg($('#m'), cfgEstado()); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
@@ -255,6 +255,7 @@ async function ruta(session) {
   if (rutaPend) { const n = rutaPend.s; rutaPend = null; ruta(n); }
 }
 async function rutaInterna(session) {
+  if (!navigator.onLine) return vistaOffline();
   if (!session) return vistaAcceso();
   const { error: ue } = await sb.auth.getUser();   // ¿la cuenta de esta sesión sigue existiendo?
   if (ue && (ue.status === 401 || ue.status === 403 || ue.status === 404 || /not exist|sub claim|invalid jwt/i.test(ue.message))) { await sb.auth.signOut(); return vistaAcceso(); }
@@ -271,6 +272,7 @@ async function rutaInterna(session) {
 async function ruta2() { const { data } = await sb.auth.getSession(); ruta(data.session); }
 
 function vistaError(m) {
+  if (/fetch|network|failed/i.test(m) && cachedCarnet()) return vistaOffline();
   app.className = 'auth'; document.body.className = '';
   app.innerHTML = `<div class="splash"><div class="logo">${ic('bell', 36)}</div><h1>Algo falla</h1><p>No se pudo leer tu perfil en la base de datos: ${esc(m)}</p></div>
   <div class="authcard"><button class="btn" onclick="ruta2()">Reintentar</button>
@@ -408,24 +410,36 @@ function qrSvg(txt) {
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
     return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path d="${d}" fill="#0E2A47"/></svg>`; } catch (e) { return ''; }
 }
-function carnetHTML(c) {
+const CARNET_KEY = 'ampa_carnet';
+function cachedCarnet() { try { return JSON.parse(localStorage.getItem(CARNET_KEY) || 'null'); } catch (e) { return null; } }
+function carnetHTML(c, svgGuardado, sinConexion) {
   if (!c) return '<div class="card vacio">Todavía no tienes carnet de socio. Si crees que es un error, contacta con el AMPA.</div>';
-  const vig = c.activo && (!c.hasta || c.hasta >= dk(new Date())), adultos = [c.titular, c.adulto2].filter(Boolean), hijos = c.hijos || [];
+  const svg = svgGuardado || (sinConexion ? '' : qrSvg(c.num));
+  if (!sinConexion) { try { localStorage.setItem(CARNET_KEY, JSON.stringify({ c, svg, t: Date.now() })); } catch (e) {} }   // copia para verlo sin conexión
+  const vig = c.activo && (!c.hasta || c.hasta >= dk(new Date())), adultos = c.adultos || [c.titular, c.adulto2].filter(Boolean), hijos = c.hijos || [];
   return `<div class="carnet ${vig ? '' : 'vencido'}"><div class="ctop"><div class="clogo">${ic('book', 22)}</div><div><b>AMPA · Región de Murcia</b><small>Carnet de socio familiar</small></div></div>
     <div class="cnum">${esc(c.num)}</div>
     <div class="cmem"><small>Padres / madres</small><b>${adultos.map(esc).join(' · ')}</b></div>
     <div class="cmem"><small>Alumnos</small><b>${hijos.length ? hijos.map(h => esc(h.nombre) + ' <i>' + esc(h.clase) + '</i>').join('<br>') : '—'}</b></div>
     <div class="cpie"><div><small>Socio desde</small><b>${fmtD(c.alta, { month: 'short', year: 'numeric' })}</b>
       <small style="margin-top:8px">Válido hasta</small><b>${c.hasta ? fmtD(c.hasta, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Sin caducidad'}</b></div>
-      <div class="cqr">${qrSvg(c.num) || '<small style="color:#0E2A47">' + esc(c.num) + '</small>'}</div></div>
+      <div class="cqr">${svg || '<small style="color:#0E2A47">' + esc(c.num) + '</small>'}</div></div>
     <div class="cestado">${vig ? 'SOCIO ACTIVO' : 'CARNET NO VIGENTE'}</div></div>
     <p class="meta" style="text-align:center">Un solo carnet para toda la familia. Enseña este código QR cuando te lo pidan.</p>`;
+}
+function vistaOffline() {
+  const k = cachedCarnet();
+  app.className = 'family'; document.body.className = 'family';
+  app.innerHTML = `<div class="hero"><div class="top"><span>AMPA · Murcia</span></div><div class="hi" style="font-size:1.9rem;margin-top:14px">Carnet de socio</div><div><span class="chip">Sin conexión</span></div></div>
+    <div class="body">${k ? carnetHTML(k.c, k.svg, true) + `<p class="meta" style="text-align:center">Copia guardada el ${new Date(k.t).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Los datos pueden haber cambiado.</p>`
+      : '<div class="card vacio">No hay conexión. Abre la app una vez con internet y entra en «Carnet de socio»: quedará guardado para verlo aquí sin conexión.</div>'}
+    <button class="btn" onclick="ruta2()">Reintentar conexión</button></div>`;
 }
 const CARD_VERIFICAR = `<div class="card"><div class="row"><div><b>Carnets de socio</b><div class="meta">Un carnet por familia</div></div><button class="pill" onclick="verificarSocio()">Verificar</button></div></div>`;
 function editSocio(code) {
   const i = D.invs.find(x => x.code === code);
   sheet('Carnet de socio', `<form><label>Número de socio</label><input value="${esc(i.socio_num || '')}" disabled>
-  <label>Segundo padre/madre (opcional, sale en el carnet)</label><input id="s2" value="${esc(i.adulto2)}">
+  <label>Otra persona en el carnet, sin acceso a la app (opcional)</label><input id="s2" value="${esc(i.adulto2)}">
   <label>Estado</label><select id="se"><option value="1" ${i.socio_activo !== false ? 'selected' : ''}>Socio activo</option><option value="0" ${i.socio_activo === false ? 'selected' : ''}>Baja</option></select>
   <label>Válido hasta (opcional)</label><input id="sh" type="date" value="${i.socio_hasta || ''}">
   <button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
@@ -437,7 +451,7 @@ function verificarSocio() {
     const { data, error } = await sb.rpc('verificar_socio', { p_num: $('#vn').value });
     $('#vres').innerHTML = error ? `<p class="msg err">${esc(error.message)}</p>` : !data ? '<p class="msg err">No existe ningún socio con ese número.</p>'
       : `<div style="border:1px solid #E6ECF3;border-radius:16px;padding:14px"><span class="pill ${data.vigente ? 'on' : 'dan'}">${data.vigente ? 'Socio vigente' : 'No vigente'}</span>
-        <h3 style="margin:10px 0 2px">${esc(data.titular)}${data.adulto2 ? ' · ' + esc(data.adulto2) : ''}</h3>
+        <h3 style="margin:10px 0 2px">${(data.adultos || [data.titular]).map(esc).join(' · ')}</h3>
         <div class="meta">${esc(data.num)} · ${data.hasta ? 'válido hasta ' + fmtD(data.hasta, { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin caducidad'}</div>
         <div>${(data.hijos || []).map(h => `<span class="chip2">${esc(h.nombre)} · ${esc(h.clase)}</span>`).join('') || '<span class="meta">Sin alumnos</span>'}</div></div>`; };
 }
@@ -503,9 +517,10 @@ async function vistaFamilia(p) {
 const AL = { c: '' }, AF = { c: '' }, CT = { s: 'noticias' }, AJ = { s: 'clases' };
 const segHTML = (n, cur, items) => `<div class="card"><div class="seg">${items.map(([v, l]) => `<button class="${cur === v ? 'on' : ''}" onclick="${n}.s='${v}';D.pintar(true)">${l}</button>`).join('')}</div></div>`;
 function famOpts(h) {
-  return '<option value="">Sin familia</option>' + (D.invs || []).map(i => { const v = i.used_by ? 'p:' + i.used_by : 'c:' + i.code;
-    const on = i.used_by ? h.parent_id === i.used_by : h.invitation_code === i.code;
-    return `<option value="${v}" ${on ? 'selected' : ''}>${esc(i.full_name)}${i.used_by ? '' : ' (pendiente)'}</option>`; }).join('');
+  return '<option value="">Sin familia</option>' + (D.invs || []).filter(i => !i.familia || i.familia === i.code).map(i => {
+    const tit = ((D.perfs || []).find(x => x.familia === i.code && !x.titular_id) || {}).id || i.used_by;
+    const v = tit ? 'p:' + tit : 'c:' + i.code, on = tit ? h.parent_id === tit : h.invitation_code === i.code;
+    return `<option value="${v}" ${on ? 'selected' : ''}>${esc(i.full_name)}${tit ? '' : ' (pendiente)'}</option>`; }).join('');
 }
 async function vistaAdmin(p) {
   if (!['familias', 'alumnos', 'actividades', 'contenido', 'ajustes'].includes(tab)) tab = 'familias';
@@ -520,12 +535,17 @@ async function vistaAdmin(p) {
   const del = (t, c, v) => `<button class="pill dan" aria-label="Borrar" onclick="borrar('${t}','${c}','${v}')">${ic('trash', 16)}</button>`;
   const filaK = h => `<div class="row" style="margin-top:8px"><span>${esc(h.name)}</span><span class="row" style="gap:6px"><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select>
     <button class="pill dan" aria-label="Quitar" onclick="borrar('children','id','${h.id}')">${ic('trash', 15)}</button></span></div>`;
-  const fam = i => { const reg = !!i.used_by, hs = D.kids.filter(h => reg ? h.parent_id === i.used_by : h.invitation_code === i.code), leg = reg ? [] : (i.hijos || []);
-    return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${reg ? 'Registrado' : 'Pendiente de registro'} · ${esc(i.socio_num || 'sin nº de socio')}${i.socio_activo === false ? ' · BAJA' : ''}</div></div>
-    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${reg ? 'p' : 'c'}','${reg ? i.used_by : esc(i.code)}')">${ic('plus', 15)}Alumno</button><button class="pill" onclick="editSocio('${esc(i.code)}')">Carnet</button>${reg ? '' : del('invitations', 'code', esc(i.code))}</span></div>
-    <div>${hs.map(filaK).join('')}${leg.map(h => `<span class="chip2">${esc(h.name)} · ${nom(cl[h.class_id])}</span>`).join('')}${hs.length || leg.length ? '' : '<span class="meta">Sin alumnos asignados todavía</span>'}</div>
-    ${reg ? '' : `<div class="btns"><span class="code" onclick="navigator.clipboard?.writeText('${esc(i.code)}');this.textContent='Copiado'">${esc(i.code)}</span>
-    <a class="pill" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Hola ' + i.full_name + ', tu código para la app del AMPA es ' + i.code)}">Enviar por WhatsApp</a></div>`}</div>`; };
+  const titId = i => (D.perfs.find(x => x.familia === i.code && !x.titular_id) || {}).id || i.used_by;
+  const fam = i => { const accesos = D.invs.filter(x => (x.familia || x.code) === i.code), tit = titId(i);
+    const hs = D.kids.filter(h => (tit && h.parent_id === tit) || h.invitation_code === i.code);
+    const acc = a => `<div class="row" style="margin-top:8px"><span><b>${esc(a.full_name)}</b><span class="meta"> · ${a.used_by ? 'registrado' : 'pendiente'}</span></span>
+      ${a.used_by ? '' : `<span class="row" style="gap:6px"><span class="code" onclick="navigator.clipboard?.writeText('${esc(a.code)}');this.textContent='Copiado'">${esc(a.code)}</span>
+      <a class="pill" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Hola ' + a.full_name + ', tu código para la app del AMPA es ' + a.code)}">WhatsApp</a></span>`}</div>`;
+    return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">Socio ${esc(i.socio_num || 'sin número')}${i.socio_activo === false ? ' · BAJA' : ''}</div></div>
+    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${tit ? 'p' : 'c'}','${tit ? tit : esc(i.code)}')">${ic('plus', 15)}Alumno</button><button class="pill" onclick="editSocio('${esc(i.code)}')">Carnet</button></span></div>
+    <div class="sec" style="margin:14px 0 0">Accesos (padre / madre)</div>${accesos.map(acc).join('')}
+    <div class="btns"><button class="pill" onclick="anadirAcceso('${esc(i.code)}')">${ic('plus', 15)}Otro acceso</button>${accesos.every(a => !a.used_by) ? del('invitations', 'code', esc(i.code)) : ''}</div>
+    <div class="sec" style="margin:14px 0 0">Alumnos</div>${hs.map(filaK).join('') || '<span class="meta">Sin alumnos asignados todavía</span>'}</div>`; };
   const alu = h => `<div class="card"><div class="row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div>
     <div><b>${esc(h.name)}</b><div class="meta">${h.parent_id || h.invitation_code ? 'Con familia' : '<span style="color:var(--error)">Sin familia todavía</span>'}</div></div></div>${del('children', 'id', h.id)}</div>
     <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
@@ -542,7 +562,7 @@ async function vistaAdmin(p) {
   D.pintar = keep => {
     const t = tab === 'ajustes' ? AJ.s : tab;
     let body = '', fab = '';
-    if (tab === 'familias') { fab = 'addFam'; body = D.invs.map(fam).join('') || '<div class="card vacio">Pulsa + para añadir una familia. También puedes crear antes a los alumnos en la pestaña Alumnos.</div>'; }
+    if (tab === 'familias') { fab = 'addFam'; body = D.invs.filter(x => !x.familia || x.familia === x.code).map(fam).join('') || '<div class="card vacio">Pulsa + para añadir una familia. También puedes crear antes a los alumnos en la pestaña Alumnos.</div>'; }
     if (tab === 'alumnos') { fab = 'addAlumno'; body = `<div class="card"><select onchange="AL.c=this.value;D.pintar(true)"><option value="">Todas las clases</option>${opts(AL.c)}</select></div>`
       + (D.kids.filter(h => !AL.c || h.class_id === AL.c).map(alu).join('') || '<div class="card vacio">Pulsa + para añadir alumnos. No hace falta que su familia exista todavía.</div>'); }
     if (tab === 'actividades') { fab = 'addAct'; body = `<div class="card"><select onchange="AF.c=this.value;D.pintar(true)"><option value="">Ver todas las clases</option>${opts(AF.c)}</select></div>`
@@ -569,24 +589,32 @@ async function vistaAdmin(p) {
   D.pintar();
 }
 const filaNuevo = () => `<div class="hrow"><input placeholder="Nombre del alumno/a"><select>${D.clases.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select></div>`;
+const genCode = () => { const a = new Uint8Array(8); crypto.getRandomValues(a); return [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join(''); };
 function addFam() {
   const libres = D.kids.filter(h => !h.parent_id && !h.invitation_code);
-  sheet('Añadir familia', `<form><label>Nombre del padre/madre</label><input id="fn" required>
+  sheet('Añadir familia', `<form><label>Padre/madre (titular)</label><input id="fn" required>
+  <label>Segundo padre/madre (opcional, con su propio acceso)</label><input id="fn2">
   ${libres.length ? `<label>Alumnos ya creados, sin familia</label>${libres.map(h => `<label class="ck"><input type="checkbox" value="${h.id}">${esc(h.name)} · ${esc(D.clases.find(c => c.id === h.class_id)?.name || '')}</label>`).join('')}` : ''}
   ${D.clases.length ? `<label>Alumnos nuevos (opcional)</label><div id="hs"></div>
   <button type="button" class="pill" style="margin-top:10px" onclick="$('#hs').insertAdjacentHTML('beforeend',filaNuevo())">${ic('plus', 15)}Alumno nuevo</button>` : ''}
-  <p class="meta">Puedes crear la familia sin alumnos y asignarlos después desde la pestaña Alumnos.</p>
-  <button class="btn">Generar código</button><p id="m" class="msg"></p></form>`);
+  <p class="meta">Cada persona recibe su propio código y entra con su correo, pero toda la familia comparte alumnos y carnet. Los alumnos se pueden asignar después.</p>
+  <button class="btn">Generar códigos</button><p id="m" class="msg"></p></form>`);
   form(async () => {
-    const a = new Uint8Array(8); crypto.getRandomValues(a);
-    const code = [...a].map(b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
+    const code = genCode();
     const { error } = await sb.from('invitations').insert({ code, full_name: $('#fn').value.trim() }); if (error) return { error };
+    const n2 = $('#fn2').value.trim();
+    if (n2) { const { error: e1 } = await sb.from('invitations').insert({ code: genCode(), full_name: n2, familia: code }); if (e1) return { error: e1 }; }
     const ids = [...document.querySelectorAll('#sheet input[type=checkbox]:checked')].map(x => x.value);
     if (ids.length) { const { error: e2 } = await sb.from('children').update({ invitation_code: code }).in('id', ids); if (e2) return { error: e2 }; }
     const nuevos = [...document.querySelectorAll('#hs .hrow')].map(r => ({ name: r.querySelector('input').value.trim(), class_id: r.querySelector('select').value, invitation_code: code })).filter(h => h.name);
     if (nuevos.length) { const { error: e3 } = await sb.from('children').insert(nuevos); if (e3) return { error: e3 }; }
     return {};
   });
+}
+function anadirAcceso(code) {
+  sheet('Acceso para otro padre/madre', `<form><p class="meta">Tendrá su propio correo y contraseña, pero verá los mismos alumnos y el mismo carnet de la familia.</p>
+  <label>Nombre</label><input id="an3" required><button class="btn">Generar código</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.from('invitations').insert({ code: genCode(), full_name: $('#an3').value.trim(), familia: code }));
 }
 function addAlumno() {
   if (!D.clases.length) return alert('Crea primero alguna clase en la pestaña Clases.');
@@ -768,13 +796,14 @@ async function avisar(id) {
   alert(error ? 'No se pudo enviar el correo.' : 'Correo enviado a ' + data.sent + ' familia(s).');
 }
 
-sb.auth.onAuthStateChange((ev, s) => {
+if (!sb) vistaOffline(); else sb.auth.onAuthStateChange((ev, s) => {
   if (registrando) return;
   if (ev === 'PASSWORD_RECOVERY') recovery = true;
   if (recovery && s) return void setTimeout(vistaNuevaClave, 0);
   if (['SIGNED_IN', 'SIGNED_OUT', 'INITIAL_SESSION'].includes(ev)) setTimeout(() => ruta(s), 0);
 });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('online', () => { if (sb) ruta2(); else location.reload(); });
 </script>
 </body>
 </html>
