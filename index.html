@@ -15,6 +15,7 @@
 <script src="config.js"></script>
 <script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
 :root{--tinta:#0E2A47;--mar:#0F6E7C;--mar2:#19B3A6;--limon:#FFC83D;--fondo:#F2F5FA;--suave:#6B7C93;--error:#D6362B;
 --t:'Bricolage Grotesque','Trebuchet MS',sans-serif;--c:'Nunito Sans','Segoe UI',sans-serif;--sa:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
@@ -138,6 +139,18 @@ body.admin .sh .pill{background:#E4ECF6;color:var(--tinta)}
 .dia.ev.sel{background:linear-gradient(135deg,hsl(var(--k) 70% 40%),hsl(calc(var(--k) + 30) 75% 52%));color:#fff}
 .dia.fin:not(.ev){color:var(--suave)}
 .dia.hoy{box-shadow:inset 0 0 0 2px var(--mar)}
+.carnet{position:relative;overflow:hidden;border-radius:26px;padding:20px;color:#fff;background:linear-gradient(135deg,#0B5566,#19B3A6 70%,#7BE0C3);box-shadow:0 18px 40px #0f6e7c55;margin-bottom:14px;animation:in .5s both}
+.carnet::before{content:'';position:absolute;width:200px;height:200px;border-radius:50%;right:-60px;top:-70px;background:radial-gradient(circle at 30% 30%,#FFE493,#FFC83D 60%,#FFB300)}
+.carnet>*{position:relative}
+.ctop{display:flex;gap:12px;align-items:center}.ctop small{display:block;opacity:.85}
+.clogo{width:42px;height:42px;border-radius:14px;background:#fff;color:#0B5566;display:grid;place-items:center}
+.cnum{font:800 2.1rem/1 var(--t);letter-spacing:.08em;margin:24px 0 16px}
+.cmem{margin-bottom:12px}.cmem small,.cpie small{display:block;opacity:.8;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em}
+.cmem b{font-size:1.02rem}.cmem i{opacity:.85;font-style:normal;font-weight:600}
+.cpie{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:6px}
+.cqr{background:#fff;border-radius:16px;padding:10px;width:116px;height:116px;flex:0 0 116px;display:grid;place-items:center}.cqr svg{width:100%;height:100%;display:block}
+.cestado{margin-top:16px;display:inline-block;background:#ffffff2e;border-radius:99px;padding:4px 14px;font-weight:800;font-size:.75rem;letter-spacing:.08em}
+.carnet.vencido{background:linear-gradient(135deg,#566071,#8a94a6);box-shadow:0 18px 40px #56607155}.carnet.vencido::before{opacity:.3}
 </style>
 </head>
 <body>
@@ -183,7 +196,8 @@ const IC = {
  chat:'<path d="M21 12a8 8 0 0 1-11.7 7L4 20l1.1-4.4A8 8 0 1 1 21 12z"/>',
  insta:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>',
  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
- list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'};
+ list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ id:'<rect x="2" y="5" width="20" height="14" rx="3"/><circle cx="8" cy="12" r="2"/><path d="M13 10h5M13 14h4M5 16c.6-1.6 4.4-1.6 5 0"/>'};
 const ic = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const hola = n => { const h = new Date().getHours(); return `<div class="sol">${ic(h < 6 || h >= 21 ? 'moon' : 'sun', 26)}</div><div class="hi">${saludo()},<br>${esc(n)}</div>`; };
@@ -216,7 +230,7 @@ function vistaAcceso(modo = 'entrar') {
   <label>Contraseña</label><input id="pw" type="password" minlength="6" required autocomplete="${modo === 'alta' ? 'new-password' : 'current-password'}">
   <button class="btn">${modo === 'alta' ? 'Crear mi cuenta' : 'Entrar'}</button><p id="m" class="msg"></p>
   ${modo === 'entrar' ? '<p style="text-align:center;margin:14px 0 0"><a href="#" onclick="recuperar();return false" style="color:var(--mar);font-weight:700">¿Has olvidado tu contraseña?</a></p>' : ''}</form>
-  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${cfgEstado() ? 'Sin configurar (config.js)' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v22</p></div>`;
+  <p class="meta" style="text-align:center;margin:12px 0 0;font-size:.75rem">${cfgEstado() ? 'Sin configurar (config.js)' : 'Conectado a ' + esc(SB_URL.replace(/^https?:\/\//, ''))} · v24</p></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); if (cfgEstado()) return msg($('#m'), cfgEstado()); const m = $('#m'), em = $('#em').value.trim(), pw = $('#pw').value;
     if (modo === 'entrar') { const { error } = await sb.auth.signInWithPassword({ email: em, password: pw }); if (error) msg(m, /confirm/i.test(error.message) ? 'Tu correo aún no está confirmado en Supabase.' : /fetch|network/i.test(error.message) ? 'Sin conexión con la base de datos: revisa SB_URL y SB_KEY.' : 'Correo o contraseña incorrectos.'); return; }
@@ -389,6 +403,44 @@ function agendaLista(acts, cardFn, vacio) {
     <button class="${prox ? '' : 'on'}" onclick="AGL.v='pasadas';D.pintar(true)">Anteriores</button></div></div>`
     + (h || `<div class="card vacio">${prox ? vacio : 'Todavía no hay actividades anteriores.'}</div>`);
 }
+function qrSvg(txt) {
+  try { const q = qrcode(0, 'M'); q.addData(txt); q.make(); const n = q.getModuleCount(); let d = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+    return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path d="${d}" fill="#0E2A47"/></svg>`; } catch (e) { return ''; }
+}
+function carnetHTML(c) {
+  if (!c) return '<div class="card vacio">Todavía no tienes carnet de socio. Si crees que es un error, contacta con el AMPA.</div>';
+  const vig = c.activo && (!c.hasta || c.hasta >= dk(new Date())), adultos = [c.titular, c.adulto2].filter(Boolean), hijos = c.hijos || [];
+  return `<div class="carnet ${vig ? '' : 'vencido'}"><div class="ctop"><div class="clogo">${ic('book', 22)}</div><div><b>AMPA · Región de Murcia</b><small>Carnet de socio familiar</small></div></div>
+    <div class="cnum">${esc(c.num)}</div>
+    <div class="cmem"><small>Padres / madres</small><b>${adultos.map(esc).join(' · ')}</b></div>
+    <div class="cmem"><small>Alumnos</small><b>${hijos.length ? hijos.map(h => esc(h.nombre) + ' <i>' + esc(h.clase) + '</i>').join('<br>') : '—'}</b></div>
+    <div class="cpie"><div><small>Socio desde</small><b>${fmtD(c.alta, { month: 'short', year: 'numeric' })}</b>
+      <small style="margin-top:8px">Válido hasta</small><b>${c.hasta ? fmtD(c.hasta, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Sin caducidad'}</b></div>
+      <div class="cqr">${qrSvg(c.num) || '<small style="color:#0E2A47">' + esc(c.num) + '</small>'}</div></div>
+    <div class="cestado">${vig ? 'SOCIO ACTIVO' : 'CARNET NO VIGENTE'}</div></div>
+    <p class="meta" style="text-align:center">Un solo carnet para toda la familia. Enseña este código QR cuando te lo pidan.</p>`;
+}
+const CARD_VERIFICAR = `<div class="card"><div class="row"><div><b>Carnets de socio</b><div class="meta">Un carnet por familia</div></div><button class="pill" onclick="verificarSocio()">Verificar</button></div></div>`;
+function editSocio(code) {
+  const i = D.invs.find(x => x.code === code);
+  sheet('Carnet de socio', `<form><label>Número de socio</label><input value="${esc(i.socio_num || '')}" disabled>
+  <label>Segundo padre/madre (opcional, sale en el carnet)</label><input id="s2" value="${esc(i.adulto2)}">
+  <label>Estado</label><select id="se"><option value="1" ${i.socio_activo !== false ? 'selected' : ''}>Socio activo</option><option value="0" ${i.socio_activo === false ? 'selected' : ''}>Baja</option></select>
+  <label>Válido hasta (opcional)</label><input id="sh" type="date" value="${i.socio_hasta || ''}">
+  <button class="btn">Guardar</button><p id="m" class="msg"></p></form>`);
+  form(() => sb.from('invitations').update({ adulto2: $('#s2').value.trim() || null, socio_activo: $('#se').value === '1', socio_hasta: $('#sh').value || null }).eq('code', code));
+}
+function verificarSocio() {
+  sheet('Verificar carnet', `<form><label>Número de socio</label><input id="vn" placeholder="S-0001" autocapitalize="characters" required><button class="btn">Comprobar</button></form><div id="vres" style="margin-top:14px"></div>`);
+  $('#sheet form').onsubmit = async e => { e.preventDefault();
+    const { data, error } = await sb.rpc('verificar_socio', { p_num: $('#vn').value });
+    $('#vres').innerHTML = error ? `<p class="msg err">${esc(error.message)}</p>` : !data ? '<p class="msg err">No existe ningún socio con ese número.</p>'
+      : `<div style="border:1px solid #E6ECF3;border-radius:16px;padding:14px"><span class="pill ${data.vigente ? 'on' : 'dan'}">${data.vigente ? 'Socio vigente' : 'No vigente'}</span>
+        <h3 style="margin:10px 0 2px">${esc(data.titular)}${data.adulto2 ? ' · ' + esc(data.adulto2) : ''}</h3>
+        <div class="meta">${esc(data.num)} · ${data.hasta ? 'válido hasta ' + fmtD(data.hasta, { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin caducidad'}</div>
+        <div>${(data.hijos || []).map(h => `<span class="chip2">${esc(h.nombre)} · ${esc(h.clase)}</span>`).join('') || '<span class="meta">Sin alumnos</span>'}</div></div>`; };
+}
 function contactoHTML(c) {
   const dig = v => String(v || '').replace(/[^\d+]/g, ''), ig = String(c.instagram || '').replace(/^@/, '');
   const url = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
@@ -402,8 +454,9 @@ function contactoHTML(c) {
 
 /* ---------- App de familias ---------- */
 async function vistaFamilia(p) {
-  if (!['inicio', 'noticias', 'ampa', 'colegio', 'agenda', 'calendario', 'contacto', 'hijos'].includes(tab)) tab = 'inicio';
-  const [{ data: clases }, { data: acts }, { data: hijos }, { data: insc }, { data: files }, { data: noti }, { data: cal }, { data: cont }] = await Promise.all([
+  if (!['inicio', 'noticias', 'ampa', 'colegio', 'agenda', 'calendario', 'contacto', 'hijos', 'carnet'].includes(tab)) tab = 'inicio';
+  const [{ data: carnet }, { data: clases }, { data: acts }, { data: hijos }, { data: insc }, { data: files }, { data: noti }, { data: cal }, { data: cont }] = await Promise.all([
+    sb.rpc('mi_carnet'),
     sb.from('classes').select('*').order('name'), sb.from('activities').select('*').order('starts_at'),
     sb.from('children').select('*').eq('active', true).order('name'), sb.from('enrollments').select('activity_id,child_id'), sb.from('activity_files').select('*'),
     sb.from('news').select('*').order('pinned', { ascending: false }).order('published_at', { ascending: false }),
@@ -415,14 +468,14 @@ async function vistaFamilia(p) {
   const card = (a, ab, cls) => {
     const hs = (hijos || []).filter(h => !a.class_id || h.class_id === a.class_id), fs = (files || []).filter(f => f.activity_id === a.id);
     return `<div class="card act ${cls}" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai">${cls === 'next' ? '<div class="tag">Lo siguiente</div>' : ''}<h3>${esc(a.title)}</h3>
-    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? esc(cl[a.class_id]?.name) : 'Todas las Clases'}</div>
+    <div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? esc(cl[a.class_id]?.name) : 'Todo el colegio'}</div>
     ${a.description ? `<p style="margin:6px 0 0">${esc(a.description)}</p>` : ''}
     ${fs.length ? `<div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}</div>` : ''}
     ${ab ? `<div class="btns">${hs.map(h => { const on = ins.has(a.id + '|' + h.id);
       return `<button class="pill ${on ? 'on' : ''}" onclick="inscribir('${a.id}','${h.id}',${on})">${on ? '✓ ' + esc(h.name) : 'Inscribir a ' + esc(h.name)}</button>`; }).join('') || '<span class="meta">Tus hijos/as aparecerán aquí cuando el AMPA los asigne a una clase.</span>'}</div>` : ''}
     </div></div>`; };
-  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda de actividades', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos' };
-  const TILES = [['noticias', 'news', 200], ['ampa', 'heart', 340], ['colegio', 'school', 25], ['agenda', 'list', 165], ['calendario', 'cal2', 265], ['contacto', 'phone', 140], ['hijos', 'kid', 45]];
+  const TT = { noticias: 'Noticias', ampa: 'AMPA', colegio: 'Info del colegio', agenda: 'Agenda de actividades', calendario: 'Calendario escolar', contacto: 'Contacto', hijos: 'Mis hijos', carnet: 'Carnet de socio' };
+  const TILES = [['noticias', 'news', 200], ['carnet', 'id', 45], ['ampa', 'heart', 340], ['colegio', 'school', 25], ['agenda', 'list', 165], ['calendario', 'cal2', 265], ['contacto', 'phone', 140], ['hijos', 'kid', 45]];
   const texto = (k, vacio) => `<div class="card">${C[k]?.texto ? `<p style="margin:0">${nl(C[k].texto)}</p>` : `<p class="vacio" style="margin:0">${vacio}</p>`}</div>`;
   D.pintar = keep => {
     const hero = tab === 'inicio' ? `${hola(p.full_name)}<div>${(clases || []).map(c => `<span class="chip">${esc(c.name)} · ${esc(c.course)}</span>`).join('')}</div>`
@@ -438,6 +491,7 @@ async function vistaFamilia(p) {
     if (tab === 'agenda') body = agendaLista(acts || [], a => card(a, new Date(a.starts_at) >= ahora, ''), 'Todavía no hay actividades próximas para tu clase.');
     if (tab === 'calendario') body = calEscolarGrid(cal || []);
     if (tab === 'contacto') body = contactoHTML(C.contacto || {});
+    if (tab === 'carnet') body = carnetHTML(carnet);
     if (tab === 'hijos') body = (hijos || []).map(h => `<div class="card row"><div class="row" style="gap:12px"><div class="av">${esc(h.name[0]?.toUpperCase())}</div><div><b>${esc(h.name)}</b><div class="meta">${esc(cl[h.class_id]?.name)} · curso ${esc(cl[h.class_id]?.course)}</div></div></div></div>`).join('')
       + '<p class="meta" style="text-align:center">La clase de cada hijo/a la gestiona el AMPA.</p>';
     shell('family', hero, body, [{ id: 'inicio', i: 'home', l: 'Inicio' }, { id: 'noticias', i: 'news', l: 'Noticias' }, { id: 'agenda', i: 'list', l: 'Actividades' }, { id: 'contacto', i: 'phone', l: 'Contacto' }], '', keep);
@@ -467,8 +521,8 @@ async function vistaAdmin(p) {
   const filaK = h => `<div class="row" style="margin-top:8px"><span>${esc(h.name)}</span><span class="row" style="gap:6px"><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select>
     <button class="pill dan" aria-label="Quitar" onclick="borrar('children','id','${h.id}')">${ic('trash', 15)}</button></span></div>`;
   const fam = i => { const reg = !!i.used_by, hs = D.kids.filter(h => reg ? h.parent_id === i.used_by : h.invitation_code === i.code), leg = reg ? [] : (i.hijos || []);
-    return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${reg ? 'Registrado' : 'Pendiente de registro'}</div></div>
-    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${reg ? 'p' : 'c'}','${reg ? i.used_by : esc(i.code)}')">${ic('plus', 15)}Alumno</button>${reg ? '' : del('invitations', 'code', esc(i.code))}</span></div>
+    return `<div class="card"><div class="row"><div><b>${esc(i.full_name)}</b><div class="meta">${reg ? 'Registrado' : 'Pendiente de registro'} · ${esc(i.socio_num || 'sin nº de socio')}${i.socio_activo === false ? ' · BAJA' : ''}</div></div>
+    <span class="row" style="gap:6px"><button class="pill" onclick="addHijoAdmin('${reg ? 'p' : 'c'}','${reg ? i.used_by : esc(i.code)}')">${ic('plus', 15)}Alumno</button><button class="pill" onclick="editSocio('${esc(i.code)}')">Carnet</button>${reg ? '' : del('invitations', 'code', esc(i.code))}</span></div>
     <div>${hs.map(filaK).join('')}${leg.map(h => `<span class="chip2">${esc(h.name)} · ${nom(cl[h.class_id])}</span>`).join('')}${hs.length || leg.length ? '' : '<span class="meta">Sin alumnos asignados todavía</span>'}</div>
     ${reg ? '' : `<div class="btns"><span class="code" onclick="navigator.clipboard?.writeText('${esc(i.code)}');this.textContent='Copiado'">${esc(i.code)}</span>
     <a class="pill" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Hola ' + i.full_name + ', tu código para la app del AMPA es ' + i.code)}">Enviar por WhatsApp</a></div>`}</div>`; };
@@ -477,7 +531,7 @@ async function vistaAdmin(p) {
     <div class="grid2"><div><label>Clase</label><select class="mini" onchange="moverHijo('${h.id}',this.value)">${opts(h.class_id)}</select></div>
     <div><label>Familia</label><select class="mini" onchange="asignarAlumno('${h.id}',this.value)">${famOpts(h)}</select></div></div></div>`;
   const actAdmin = a => { const fs = (files || []).filter(f => f.activity_id === a.id), is = (insc || []).filter(i => i.activity_id === a.id);
-    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? nom(cl[a.class_id]) : 'Todas las Clases'}</div>
+    return `<div class="card act" style="--k:${hue(a.class_id)}">${fechaB(a)}<div class="ai"><h3>${esc(a.title)}</h3><div class="meta">${hora(a)}${a.place ? ' · ' + esc(a.place) : ''} · ${a.class_id ? nom(cl[a.class_id]) : 'Todo el colegio'}</div>
     <div class="meta">Inscritos (${is.length}): ${is.map(i => esc(i.children?.name)).join(', ') || '—'}</div>
     <div class="btns">${fs.map(f => `<a class="pill" href="#" onclick="abrir('${esc(f.path)}');return false">${ic('clip', 15)}${esc(f.name)}</a>`).join('')}
     <label class="pill" style="margin:0">${ic('plus', 15)}Adjuntar<input type="file" multiple hidden onchange="subirA('${a.id}',this.files)"></label>
@@ -508,6 +562,7 @@ async function vistaAdmin(p) {
         <div><b>${esc(x.full_name)}</b><div class="meta">${esc(x.email || 'sin correo guardado')}</div></div></div>
         <div class="btns" style="margin:0;justify-content:flex-end"><button class="pill" aria-label="Contraseña" onclick="claveUsuario(${i})">${ic('key', 15)}</button><button class="pill ${x.role === 'admin' ? 'on' : ''}" onclick="setAdmin(${i},${x.role !== 'admin'})">${x.role === 'admin' ? '✓ Admin' : 'Hacer admin'}</button>${x.id === D.me ? '' : `<button class="pill dan" aria-label="Eliminar usuario" onclick="borrarUsuario(${i})">${ic('trash', 15)}</button>`}</div></div>`).join('') || '<div class="card vacio">Aún no hay usuarios.</div>'; }
     }
+    if (tab === 'familias') body = CARD_VERIFICAR + body;
     const hero = `${hola(p.full_name)}<div class="stats"><div><b>${D.invs.length}</b>familias</div><div><b>${D.kids.length}</b>alumnos</div><div><b>${(acts || []).length}</b>actividades</div></div>`;
     shell('admin', hero, body, [{ id: 'familias', i: 'users', l: 'Familias' }, { id: 'alumnos', i: 'kid', l: 'Alumnos' }, { id: 'actividades', i: 'list', l: 'Actividades' }, { id: 'contenido', i: 'news', l: 'Contenido' }, { id: 'ajustes', i: 'gear', l: 'Ajustes' }], fab, keep);
   };
@@ -603,7 +658,7 @@ function nuevoCurso() {
 }
 function addAct() {
   sheet('Nueva actividad', `<form><label>¿Para quién es?</label>
-  <label class="ck"><input type="checkbox" id="atodo" onchange="document.querySelectorAll('.ac-cl').forEach(x => { x.disabled = this.checked; if (this.checked) x.checked = false; })">Todas las Clases (todas las familias)</label>
+  <label class="ck"><input type="checkbox" id="atodo" onchange="document.querySelectorAll('.ac-cl').forEach(x => { x.disabled = this.checked; if (this.checked) x.checked = false; })">Todo el colegio (todas las familias)</label>
   ${D.clases.map(c => `<label class="ck"><input type="checkbox" class="ac-cl" value="${c.id}" ${c.id === AF.c ? 'checked' : ''}>${esc(c.name)} (${esc(c.course)})</label>`).join('')}
   <p class="meta" style="margin:4px 0 0">Solo la verán las familias con alumnos en las clases que marques.</p>
   <label>Título</label><input id="at" required><label>Fecha y hora</label><input id="af" type="datetime-local" value="${AG.sel ? AG.sel + 'T16:00' : ''}" required><label>Lugar</label><input id="al">
@@ -612,7 +667,7 @@ function addAct() {
   <button class="btn">Publicar</button><p id="m" class="msg"></p></form>`);
   form(async () => {
     const ids = $('#atodo').checked ? [null] : [...document.querySelectorAll('.ac-cl:checked')].map(x => x.value);
-    if (!ids.length) return { error: { message: 'Elige al menos una clase o «Todas las Clases».' } };
+    if (!ids.length) return { error: { message: 'Elige al menos una clase o «Todo el colegio».' } };
     const base = { title: $('#at').value.trim(), place: $('#al').value.trim() || null, description: $('#ad').value.trim() || null, starts_at: new Date($('#af').value).toISOString() };
     const { data, error } = await sb.from('activities').insert(ids.map(c => ({ ...base, class_id: c }))).select('id');
     if (error) return { error };
@@ -625,7 +680,7 @@ function addAct() {
 function editAct(id) {
   const a = D.acts.find(x => x.id === id), l = new Date(a.starts_at), p2 = n => String(n).padStart(2, '0');
   const dt = l.getFullYear() + '-' + p2(l.getMonth() + 1) + '-' + p2(l.getDate()) + 'T' + p2(l.getHours()) + ':' + p2(l.getMinutes());
-  sheet('Editar actividad', `<form><label>¿Para quién es?</label><select id="ec"><option value="">Todas las Clases</option>${D.clases.map(c => `<option value="${c.id}" ${c.id === a.class_id ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
+  sheet('Editar actividad', `<form><label>¿Para quién es?</label><select id="ec"><option value="">Todo el colegio</option>${D.clases.map(c => `<option value="${c.id}" ${c.id === a.class_id ? 'selected' : ''}>${esc(c.name)} (${esc(c.course)})</option>`).join('')}</select>
   <label>Título</label><input id="et2" required value="${esc(a.title)}"><label>Fecha y hora</label><input id="ef" type="datetime-local" required value="${dt}"><label>Lugar</label><input id="el" value="${esc(a.place)}">
   <label>Descripción</label><textarea id="ed2" rows="3">${esc(a.description)}</textarea><button class="btn">Guardar cambios</button><p id="m" class="msg"></p></form>`);
   form(() => sb.from('activities').update({ class_id: $('#ec').value || null, title: $('#et2').value.trim(), starts_at: new Date($('#ef').value).toISOString(),
